@@ -205,7 +205,9 @@ mod tests {
     #[test]
     fn to_owned_table_rejects_non_table() {
         let node = ConfigNode::Scalar("value".into());
-        let err = node.to_owned_table().unwrap_err();
+        let err = node
+            .to_owned_table()
+            .unwrap_err();
         assert!(matches!(
             err,
             ConfigError::TypeMismatch {

@@ -2,11 +2,7 @@ use forgeconf::{forgeconf, ConfigError};
 
 #[forgeconf(
     config(path = "tests/fixtures/priority-base.toml", priority = 5),
-    config(
-        path = "tests/fixtures/priority-override.cfg",
-        format = "toml",
-        priority = 200
-    )
+    config(path = "tests/fixtures/priority-override.cfg", format = "toml", priority = 200)
 )]
 struct LayeredConfig {
     port: u16,

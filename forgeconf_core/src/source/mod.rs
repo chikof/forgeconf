@@ -75,8 +75,9 @@ impl ConfigBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::BTreeMap;
+
+    use super::*;
 
     #[derive(Clone)]
     struct StaticSource {
@@ -88,10 +89,7 @@ mod tests {
         fn table(priority: u8, key: &str, value: &str) -> Self {
             let mut map = BTreeMap::new();
             map.insert(key.to_string(), ConfigNode::Scalar(value.to_string()));
-            Self {
-                priority,
-                node: ConfigNode::Table(map),
-            }
+            Self { priority, node: ConfigNode::Table(map) }
         }
     }
 
@@ -101,7 +99,9 @@ mod tests {
         }
 
         fn load(&self) -> Result<ConfigNode, ConfigError> {
-            Ok(self.node.clone())
+            Ok(self
+                .node
+                .clone())
         }
     }
 
@@ -130,15 +130,9 @@ mod tests {
 
     #[test]
     fn merge_nodes_replaces_non_tables() {
-        let merged = merge_nodes(
-            ConfigNode::Scalar("base".into()),
-            ConfigNode::Scalar("override".into()),
-        );
-        assert_eq!(
-            merged
-                .to_string(),
-            "override"
-        );
+        let merged =
+            merge_nodes(ConfigNode::Scalar("base".into()), ConfigNode::Scalar("override".into()));
+        assert_eq!(merged.to_string(), "override");
     }
 
     #[test]
@@ -149,7 +143,9 @@ mod tests {
             .load()
             .unwrap();
 
-        let table = node.as_table().unwrap();
+        let table = node
+            .as_table()
+            .unwrap();
         assert_eq!(
             table
                 .get("service")
