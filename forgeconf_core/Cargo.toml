@@ -21,4 +21,4 @@ toml = { version = "0.9.8", optional = true }
 yaml-rust2 = { version = "0.10.3", optional = true }
 
 [dev-dependencies]
-tempfile = "3.19.1"
+tempfile = "3.23.0"
