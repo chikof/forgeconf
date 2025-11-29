@@ -1,4 +1,4 @@
-use std::{fmt, io};
+use std::io;
 
 use thiserror::Error;
 
@@ -114,11 +114,5 @@ mod tests {
     fn missing_helper_sets_field_name() {
         let err = ConfigError::missing("database");
         assert!(matches!(err, ConfigError::MissingValue(ref key) if key == "database"));
-    }
-}
-
-impl From<ConfigError> for fmt::Error {
-    fn from(_: ConfigError) -> Self {
-        fmt::Error
     }
 }
