@@ -82,6 +82,41 @@ impl ConfigError {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mismatch_helper_builds_type_mismatch() {
+        let err = ConfigError::mismatch("port", "u16", "string");
+        assert!(matches!(
+            err,
+            ConfigError::TypeMismatch {
+                field,
+                expected,
+                found
+            } if field == "port" && expected == "u16" && found == "string"
+        ));
+    }
+
+    #[test]
+    fn nested_helper_wraps_inner_error() {
+        let inner = ConfigError::missing("host");
+        let err = ConfigError::nested("server", inner);
+        assert!(matches!(
+            err,
+            ConfigError::Nested { section, source }
+                if section == "server" && matches!(*source, ConfigError::MissingValue(ref key) if key == "host")
+        ));
+    }
+
+    #[test]
+    fn missing_helper_sets_field_name() {
+        let err = ConfigError::missing("database");
+        assert!(matches!(err, ConfigError::MissingValue(ref key) if key == "database"));
+    }
+}
+
 impl From<ConfigError> for fmt::Error {
     fn from(_: ConfigError) -> Self {
         fmt::Error

@@ -1,0 +1,7 @@
+service:
+  name: "forgeconf"
+  enabled: true
+replicas:
+  - "db-a"
+  - "db-b"
+port: 8123

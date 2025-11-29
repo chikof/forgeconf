@@ -76,11 +76,37 @@ impl ConfigBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
+
+    #[derive(Clone)]
+    struct StaticSource {
+        priority: u8,
+        node: ConfigNode,
+    }
+
+    impl StaticSource {
+        fn table(priority: u8, key: &str, value: &str) -> Self {
+            let mut map = BTreeMap::new();
+            map.insert(key.to_string(), ConfigNode::Scalar(value.to_string()));
+            Self {
+                priority,
+                node: ConfigNode::Table(map),
+            }
+        }
+    }
+
+    impl ConfigSource for StaticSource {
+        fn priority(&self) -> u8 {
+            self.priority
+        }
+
+        fn load(&self) -> Result<ConfigNode, ConfigError> {
+            Ok(self.node.clone())
+        }
+    }
 
     #[test]
     fn merge_nodes_prefers_overlay() {
-        use std::collections::BTreeMap;
-
         let mut left = BTreeMap::new();
         left.insert("port".into(), ConfigNode::Scalar("8080".into()));
 
@@ -100,5 +126,36 @@ mod tests {
             "9090"
         );
         assert!(table.contains_key("host"));
+    }
+
+    #[test]
+    fn merge_nodes_replaces_non_tables() {
+        let merged = merge_nodes(
+            ConfigNode::Scalar("base".into()),
+            ConfigNode::Scalar("override".into()),
+        );
+        assert_eq!(
+            merged
+                .to_string(),
+            "override"
+        );
+    }
+
+    #[test]
+    fn config_builder_honors_source_priority() {
+        let node = ConfigBuilder::new()
+            .add_source(StaticSource::table(5, "service", "base"))
+            .add_source(StaticSource::table(200, "service", "override"))
+            .load()
+            .unwrap();
+
+        let table = node.as_table().unwrap();
+        assert_eq!(
+            table
+                .get("service")
+                .unwrap()
+                .to_string(),
+            "override"
+        );
     }
 }

@@ -130,3 +130,37 @@ fn format_supported(format: FileFormat) -> bool {
         FileFormat::Json => cfg!(feature = "json"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn load_from_path_requires_extension() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("config");
+        fs::write(&path, "port = 7000").unwrap();
+
+        let err = load_from_path(&path, None).unwrap_err();
+        assert!(matches!(err, ConfigError::MissingExtension));
+    }
+
+    #[test]
+    fn load_from_path_uses_explicit_format() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("override.cfg");
+        fs::write(&path, "port = 6100").unwrap();
+
+        let node = load_from_path(&path, Some(FileFormat::Toml)).unwrap();
+        let table = node.as_table().unwrap();
+        assert_eq!(
+            table
+                .get("port")
+                .unwrap()
+                .to_string(),
+            "6100"
+        );
+    }
+}

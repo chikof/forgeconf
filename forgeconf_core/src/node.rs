@@ -199,6 +199,63 @@ mod tests {
     fn string_from_null_is_missing() {
         let node = ConfigNode::Null;
         let err = String::from_node(&node, "name").unwrap_err();
-        matches!(err, ConfigError::MissingValue(key) if key == "name");
+        assert!(matches!(err, ConfigError::MissingValue(key) if key == "name"));
+    }
+
+    #[test]
+    fn to_owned_table_rejects_non_table() {
+        let node = ConfigNode::Scalar("value".into());
+        let err = node.to_owned_table().unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigError::TypeMismatch {
+                field,
+                expected,
+                found
+            } if field == "root" && expected == "table" && found == "value"
+        ));
+    }
+
+    #[test]
+    fn bool_from_scalar_parses() {
+        let node = ConfigNode::Scalar("true".into());
+        let parsed = bool::from_node(&node, "flag").unwrap();
+        assert!(parsed);
+    }
+
+    #[test]
+    fn numeric_parse_error_is_reported() {
+        let node = ConfigNode::Scalar("not-a-number".into());
+        let err = u16::from_node(&node, "size").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigError::TypeMismatch {
+                field,
+                expected,
+                ..
+            } if field == "size" && expected.contains("u16")
+        ));
+    }
+
+    #[test]
+    fn char_from_long_string_is_rejected() {
+        let node = ConfigNode::Scalar("abc".into());
+        let err = char::from_node(&node, "initial").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigError::TypeMismatch { field, expected, .. }
+                if field == "initial" && expected == "character"
+        ));
+    }
+
+    #[test]
+    fn vec_from_non_array_errors() {
+        let node = ConfigNode::Scalar("nope".into());
+        let err = Vec::<u8>::from_node(&node, "values").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigError::TypeMismatch { field, expected, .. }
+                if field == "values" && expected == "array"
+        ));
     }
 }
