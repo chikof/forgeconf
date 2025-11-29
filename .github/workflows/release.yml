@@ -1,0 +1,60 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo directories
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: forgeconf
+
+      - name: Verify tag matches crate version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          crate_version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="forgeconf") | .version' | head -n1)
+          if [ "$tag" != "$crate_version" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match forgeconf crate version ${crate_version}"
+            exit 1
+          fi
+
+      - name: Publish forgeconf_core
+        run: cargo publish --package forgeconf_core
+
+      - name: Wait for forgeconf_core to propagate
+        run: sleep 20
+
+      - name: Publish forgeconf_macros
+        run: cargo publish --package forgeconf_macros
+
+      - name: Wait for forgeconf_macros to propagate
+        run: sleep 20
+
+      - name: Publish forgeconf
+        run: cargo publish --package forgeconf
+
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Forgeconf ${{ github.ref_name }}
+          generateReleaseNotes: true

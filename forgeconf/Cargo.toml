@@ -1,0 +1,20 @@
+[package]
+name = "forgeconf"
+description = "Declarative configuration loader for Rust structs powered by attribute macros."
+version = "0.1.0"
+edition = "2021"
+authors = ["Chiko <chiko@envs.net>"]
+license = "MIT"
+keywords = ["configuration", "macro", "toml", "yaml", "json"]
+readme = "../README.md"
+repository = "https://github.com/chikof/forgeconf"
+
+[features]
+default = ["toml", "yaml"]
+toml = ["forgeconf_macros/toml", "forgeconf_core/toml"]
+yaml = ["forgeconf_macros/yaml", "forgeconf_core/yaml"]
+json = ["forgeconf_macros/json", "forgeconf_core/json"]
+
+[dependencies]
+forgeconf_macros = { version = "=0.1.0", path = "../forgeconf_macros" }
+forgeconf_core = { version = "=0.1.0", path = "../forgeconf_core" }
