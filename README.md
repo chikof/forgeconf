@@ -14,6 +14,7 @@ Forgeconf is a small attribute macro and runtime for loading configuration files
       - [Validators](#validators)
     - [Loader API](#loader-api)
   - [Format support](#format-support)
+  - [Releasing](#releasing)
   - [License](#license)
 <!--toc:end-->
 
@@ -162,6 +163,22 @@ let cfg = AppConfig::loader()
 | `json`  | `jzon`       | `.json`                 |
 
 Each parser lives behind a feature flag. Disable defaults if you want to ship with no parsers enabled.
+
+## Releasing
+
+The repository ships with `scripts/release.sh` to automate version bumps, changelog generation, tagging, and pushes. Requirements:
+
+- `cargo set-version` (`cargo install cargo-edit`)
+- `git-cliff`
+- Rust nightly toolchain (for formatting) plus the regular stable toolchain
+
+To publish a new release (for example `0.2.1`):
+
+```bash
+./scripts/release.sh 0.2.1
+```
+
+The script ensures the working tree is clean, bumps every crate in the workspace, regenerates `CHANGELOG.md` through `git-cliff`, runs formatting and tests, commits the results, tags the release (`v0.2.1`), and pushes both the branch and tag. Once the tag hits GitHub, the `release` workflow publishes the crates and attaches the same changelog to the GitHub Release entry.
 
 ## License
 

@@ -46,6 +46,7 @@
             cargo-nextest
             cargo-expand
             git-cliff
+            cargo-edit
           ];
 
           env = {

@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
-## [unreleased]
+## [0.2.0](https://github.com/chikof/forgeconf/compare/v0.1.0..v0.2.0) - 2025-11-30
 
 ### Bug Fixes
 
@@ -11,10 +11,12 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Features
 
+- **(validators)** add built-in helpers and git-cliff notes - ([35db15b](https://github.com/chikof/forgeconf/commit/35db15b7eb9c129a7642fb20c8669cef2d7dcfc4)) - chikof
 - couple of tests - ([ef92d13](https://github.com/chikof/forgeconf/commit/ef92d136c1cd1d9f66525f772104401401b1d7da)) - chikof
 
 ### Miscellaneous Chores
 
+- **(release)** bump versions to 0.2.0 - ([56b8f1e](https://github.com/chikof/forgeconf/commit/56b8f1e26c827a062bfbab8c4612734cdebc1410)) - chikof
 - forgot to run cargo fmt - ([be2337b](https://github.com/chikof/forgeconf/commit/be2337b1767c4be62f3bc556b955c77204f8094c)) - chikof
 
 ### Build
