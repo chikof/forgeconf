@@ -68,7 +68,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "forgeconf"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "forgeconf_core",
  "forgeconf_macros",
@@ -77,7 +77,7 @@ dependencies = [
 
 [[package]]
 name = "forgeconf_core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "jzon",
  "regex",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "forgeconf_macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "forgeconf_core",
  "proc-macro2",
