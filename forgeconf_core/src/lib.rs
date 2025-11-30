@@ -4,6 +4,7 @@ mod error;
 mod node;
 mod parser;
 mod source;
+pub mod validators;
 
 pub use error::ConfigError;
 pub use node::{ConfigNode, FromNode};

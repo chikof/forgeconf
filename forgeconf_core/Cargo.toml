@@ -9,16 +9,18 @@ repository = "https://github.com/chikof/forgeconf"
 readme = "../README.md"
 
 [features]
-default = ["toml"]
+default = ["toml", "regex"]
 toml = ["dep:toml"]
 yaml = ["dep:yaml-rust2"]
 json = ["dep:jzon"]
+regex = ["dep:regex"]
 
 [dependencies]
 thiserror = "2.0.12"
 jzon = { version = "0.12.5", optional = true }
 toml = { version = "0.9.8", optional = true }
 yaml-rust2 = { version = "0.10.4", optional = true }
+regex = { version = "1.11.1", optional = true }
 
 [dev-dependencies]
 tempfile = "3.23.0"

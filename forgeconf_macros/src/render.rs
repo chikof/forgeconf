@@ -123,6 +123,7 @@ fn render_field_init(field: &FieldSpec) -> TokenStream {
         .clone()
         .unwrap_or_else(|| ident.to_string());
     let key_lit = LitStr::new(&key, ident.span());
+    let value_ident = format_ident!("__forgeconf_value");
 
     let lookup_expr = if field
         .options
@@ -205,49 +206,51 @@ fn render_field_init(field: &FieldSpec) -> TokenStream {
         }
     };
 
-    match field_kind(field) {
+    let base_expr = match field_kind(field) {
         FieldKind::Optional => {
             quote! {
-                #ident: {
-                    let node = #fetch_value.unwrap_or(::forgeconf::ConfigNode::Null);
-                    <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
-                }
+                let node = #fetch_value.unwrap_or(::forgeconf::ConfigNode::Null);
+                <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
             }
         },
         FieldKind::Default(expr) => {
             quote! {
-                #ident: {
-                    if let Some(node) = #fetch_value {
-                        <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
-                    } else {
-                        #expr
-                    }
+                if let Some(node) = #fetch_value {
+                    <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
+                } else {
+                    #expr
                 }
             }
         },
         FieldKind::Scalar => {
             quote! {
-                #ident: {
-                    if let Some(node) = #fetch_value {
-                        <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
-                    } else {
-                        return Err(::forgeconf::ConfigError::missing(#key_lit));
-                    }
+                if let Some(node) = #fetch_value {
+                    <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
+                } else {
+                    return Err(::forgeconf::ConfigError::missing(#key_lit));
                 }
             }
         },
         FieldKind::Nested => {
             quote! {
-                #ident: {
-                    if let Some(node) = #fetch_value {
-                        <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
-                    } else {
-                        let fallback = ::forgeconf::ConfigNode::Table(map.clone());
-                        <#ty as ::forgeconf::FromNode>::from_node(&fallback, #key_lit)?
-                    }
+                if let Some(node) = #fetch_value {
+                    <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
+                } else {
+                    let fallback = ::forgeconf::ConfigNode::Table(map.clone());
+                    <#ty as ::forgeconf::FromNode>::from_node(&fallback, #key_lit)?
                 }
             }
         },
+    };
+
+    let validator_calls = render_validator_calls(field, &key_lit, &value_ident);
+
+    quote! {
+        #ident: {
+            let #value_ident = { #base_expr };
+            #validator_calls
+            #value_ident
+        }
     }
 }
 
@@ -275,4 +278,32 @@ enum FieldKind<'a> {
     Default(&'a Expr),
     Scalar,
     Nested,
+}
+
+fn render_validator_calls(
+    field: &FieldSpec,
+    key_lit: &LitStr,
+    value_ident: &proc_macro2::Ident,
+) -> TokenStream {
+    if field
+        .options
+        .validators
+        .is_empty()
+    {
+        return TokenStream::new();
+    }
+
+    let validators = field
+        .options
+        .validators
+        .iter()
+        .map(|expr| {
+            quote! {
+                (#expr)(&#value_ident, #key_lit)?;
+            }
+        });
+
+    quote! {
+        #(#validators)*
+    }
 }

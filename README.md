@@ -2,6 +2,21 @@
 
 Forgeconf is a small attribute macro and runtime for loading configuration files into strongly typed Rust structs. It is built for services that need predictable merge semantics, compile-time validation, and the ability to override values from the command line or the environment without sprinkling glue code throughout the application.
 
+## Table of Contents
+
+<!--toc:start-->
+- [Forgeconf](#forgeconf)
+  - [Highlights](#highlights)
+  - [Install](#install)
+  - [Quick start](#quick-start)
+  - [Attribute reference](#attribute-reference)
+    - [Field modifiers](#field-modifiers)
+      - [Validators](#validators)
+    - [Loader API](#loader-api)
+  - [Format support](#format-support)
+  - [License](#license)
+<!--toc:end-->
+
 ## Highlights
 
 - 🧱 **Single source of truth** – annotate your struct once and Forgeconf generates the loader, builder, and conversion logic.
@@ -19,14 +34,16 @@ Add Forgeconf to your workspace:
 forgeconf = "0.1"
 ```
 
-The crate enables TOML and YAML parsing by default. Add `json` if you want JSON support, or disable defaults to pick a subset:
+The crate enables TOML, YAML, and regex-powered validators by default. Add `json` if you want JSON support, or disable defaults to pick a subset:
 
 ```toml
 [dependencies.forgeconf]
 version = "0.1"
 default-features = false
-features = ["json"]
+features = ["json", "regex"]
 ```
+
+Disable `regex` if you want to skip the `regex` crate entirely, or re-enable it explicitly (as shown above) when using `validators::matches_regex`.
 
 ## Quick start
 
@@ -75,12 +92,48 @@ Use `#[field(...)]` on struct fields to fine tune the behaviour:
 | `cli`         | string       | Check `--<cli>=value` CLI flags before files  |
 | `default`     | expression   | Fall back to the provided literal/expression  |
 | `optional`    | bool         | Treat `Option<T>` fields as optional          |
+| `validate`    | expression   | Invoke a validator after parsing (repeatable) |
 
 All lookups resolve in the following order:
 
 1. Field-level CLI override (`#[field(cli = "...")]`)
 2. Field-level env override (`#[field(env = "...")]`)
 3. Sources registered on the loader (`with_cli`, `with_config`, or `add_source`)
+
+#### Validators
+
+Validators are plain expressions that evaluate to something callable with `(&T, &str)` and returning `Result<(), ConfigError>`. You can reference free functions, closures, or the helpers under `forgeconf::validators`:
+
+```rust,no_run
+fn ensure_https(value: &String, key: &str) -> Result<(), ConfigError> {
+    if value.starts_with("https://") {
+        Ok(())
+    } else {
+        Err(ConfigError::mismatch(key, "https url", value.clone()))
+    }
+}
+
+#[forgeconf]
+struct SecureConfig {
+    #[field(validate = forgeconf::validators::range(1024, 65535))]
+    port: u16,
+    #[field(
+        validate = ensure_https,
+        validate = forgeconf::validators::len_range(12, 128),
+        validate = forgeconf::validators::matches_regex(regex::Regex::new("^https://").unwrap()),
+    )]
+    endpoint: String,
+}
+```
+
+The most common helpers:
+
+- `non_empty()`, `min_len(n)`, `max_len(n)`, and `len_range(min, max)` – work with any type implementing `validators::HasLen` (Strings, Vecs, maps, sets, …).
+- `range(min, max)` – enforce numeric/string bounds via `PartialOrd`.
+- `one_of([..])` – restrict values to a predefined set.
+- `matches_regex(regex::Regex)` – ensure the value matches a regular expression (enable the `regex` Cargo feature and add the [`regex`](https://crates.io/crates/regex) crate to your `Cargo.toml` when using this helper).
+
+Each helper returns a closure that you can combine or wrap to build higher-level policies.
 
 ### Loader API
 

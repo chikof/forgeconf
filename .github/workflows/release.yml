@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -36,6 +38,40 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match forgeconf crate version ${crate_version}"
             exit 1
           fi
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Generate release notes with git-cliff
+        run: |
+          git cliff --config cliff.toml --tag "${GITHUB_REF_NAME}" > release-notes.md
+
+      - name: Append crate versions
+        run: |
+          {
+            echo ""
+            echo "## Published Crates"
+            packages=$(cargo metadata --no-deps --format-version 1 \
+              | jq -r '.packages[] | select(.name=="forgeconf" or .name=="forgeconf_core" or .name=="forgeconf_macros") | "- `"+.name+"` `"+.version+"`"' \
+              | sort || true)
+            if [ -n "$packages" ]; then
+              printf '%s\n' "$packages"
+            else
+              echo "- No workspace crates detected."
+            fi
+          } >> release-notes.md
+
+      - name: Capture release notes
+        id: notes
+        run: |
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+          {
+            printf 'body<<EOF\n'
+            cat release-notes.md
+            printf 'EOF\n'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish forgeconf_core
         run: cargo publish --package forgeconf_core
@@ -57,4 +93,5 @@ jobs:
         with:
           tag: ${{ github.ref_name }}
           name: Forgeconf ${{ github.ref_name }}
-          generateReleaseNotes: true
+          allowUpdates: true
+          body: ${{ steps.notes.outputs.body }}

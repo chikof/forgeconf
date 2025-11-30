@@ -31,6 +31,7 @@ pub struct FieldOptions {
     pub cli: Option<String>,
     pub default: Option<Expr>,
     pub optional: bool,
+    pub validators: Vec<Expr>,
 }
 
 impl Parse for ForgeconfAttr {
@@ -167,6 +168,9 @@ impl FieldOptions {
                 MetaEntry::Cli(value) => options.cli = Some(value.value()),
                 MetaEntry::Optional(flag) => options.optional = flag.value(),
                 MetaEntry::Default(expr) => options.default = Some(expr),
+                MetaEntry::Validator(expr) => options
+                    .validators
+                    .push(expr),
             }
         }
 
@@ -204,6 +208,13 @@ impl FieldOptions {
         if other.optional {
             self.optional = true;
         }
+        if !other
+            .validators
+            .is_empty()
+        {
+            self.validators
+                .extend(other.validators);
+        }
         Ok(())
     }
 
@@ -229,6 +240,7 @@ enum MetaEntry {
     Cli(LitStr),
     Optional(LitBool),
     Default(Expr),
+    Validator(Expr),
 }
 
 impl Parse for MetaEntry {
@@ -246,6 +258,7 @@ impl Parse for MetaEntry {
             "cli" => Ok(MetaEntry::Cli(input.parse()?)),
             "optional" => Ok(MetaEntry::Optional(input.parse()?)),
             "default" => Ok(MetaEntry::Default(input.parse()?)),
+            "validate" => Ok(MetaEntry::Validator(input.parse()?)),
             other => Err(Error::new(ident.span(), format!("unknown field attribute `{other}`"))),
         }
     }

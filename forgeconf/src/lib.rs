@@ -29,6 +29,7 @@
 
 pub use forgeconf_core::{
     merge_nodes,
+    validators,
     CliArguments,
     ConfigBuilder,
     ConfigError,

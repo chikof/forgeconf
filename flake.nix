@@ -45,6 +45,7 @@
             grcov
             cargo-nextest
             cargo-expand
+            git-cliff
           ];
 
           env = {
