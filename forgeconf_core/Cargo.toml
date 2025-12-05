@@ -16,7 +16,7 @@ json = ["dep:jzon"]
 regex = ["dep:regex"]
 
 [dependencies]
-thiserror = "2.0.12"
+thiserror = "2.0.17"
 jzon = { version = "0.12.5", optional = true }
 toml = { version = "0.9.8", optional = true }
 yaml-rust2 = { version = "0.10.4", optional = true }
