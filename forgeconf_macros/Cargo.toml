@@ -20,6 +20,6 @@ proc-macro = true
 [dependencies]
 forgeconf_core = { version = "=0.2.0", path = "../forgeconf_core" }
 proc-macro2 = "1.0.103"
-quote = "1.0.40"
+quote = "1.0.42"
 syn = { version = "2.0.111", features = ["full", "extra-traits"] }
 thiserror = "2.0.17"
