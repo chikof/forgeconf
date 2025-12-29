@@ -23,4 +23,4 @@ yaml-rust2 = { version = "0.10.4", optional = true }
 regex = { version = "1.11.1", optional = true }
 
 [dev-dependencies]
-tempfile = "3.23.0"
+tempfile = "3.24.0"
