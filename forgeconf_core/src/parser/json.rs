@@ -6,7 +6,7 @@ use crate::{ConfigError, ConfigNode};
 
 /// Parse JSON content into a ConfigNode tree.
 pub fn parse(input: &str) -> Result<ConfigNode, ConfigError> {
-    let value = jzon::parse(input).map_err(ConfigError::Json)?;
+    let value = jzon::parse(input).map_err(|source| ConfigError::Json { source, span: None })?;
     Ok(convert(value))
 }
 
@@ -164,6 +164,6 @@ mod tests {
     fn returns_error_on_invalid_json() {
         let input = r#"{"invalid": }"#;
         let err = parse(input).unwrap_err();
-        assert!(matches!(err, ConfigError::Json(_)));
+        assert!(matches!(err, ConfigError::Json { .. }));
     }
 }

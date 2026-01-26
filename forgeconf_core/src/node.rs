@@ -199,7 +199,10 @@ mod tests {
     fn string_from_null_is_missing() {
         let node = ConfigNode::Null;
         let err = String::from_node(&node, "name").unwrap_err();
-        assert!(matches!(err, ConfigError::MissingValue(key) if key == "name"));
+        assert!(matches!(
+            err,
+            ConfigError::MissingValue { ref field, .. } if field == "name"
+        ));
     }
 
     #[test]
@@ -213,7 +216,8 @@ mod tests {
             ConfigError::TypeMismatch {
                 field,
                 expected,
-                found
+                found,
+                ..
             } if field == "root" && expected == "table" && found == "value"
         ));
     }

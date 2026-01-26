@@ -6,7 +6,8 @@ use crate::{ConfigError, ConfigNode};
 
 /// Parse TOML content into a ConfigNode tree.
 pub fn parse(input: &str) -> Result<ConfigNode, ConfigError> {
-    let value: Value = toml::from_str(input).map_err(ConfigError::Toml)?;
+    let value: Value =
+        toml::from_str(input).map_err(|source| ConfigError::Toml { source, span: None })?;
     Ok(convert(value))
 }
 
@@ -119,6 +120,6 @@ mod tests {
     fn returns_error_on_invalid_toml() {
         let input = "invalid = [toml";
         let err = parse(input).unwrap_err();
-        assert!(matches!(err, ConfigError::Toml(_)));
+        assert!(matches!(err, ConfigError::Toml { .. }));
     }
 }

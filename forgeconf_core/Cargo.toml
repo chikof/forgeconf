@@ -17,8 +17,10 @@ regex = ["dep:regex"]
 cli = []
 validators = []
 parse = []
+miette = ["miette/fancy"]
 
 [dependencies]
+miette = { version = "7.6.0", optional = false, default-features = false, features = ["derive"] }
 thiserror = "2.0.17"
 jzon = { version = "0.12.5", optional = true }
 toml = { version = "0.9.11", optional = true }

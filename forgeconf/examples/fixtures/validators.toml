@@ -1,0 +1,6 @@
+port = 8080
+host = "api.example.com"
+workers = 4
+log_level = "info"
+api_key = "sk_test_1234567890abcdefghijklmnopqrstuvwxyz"
+tags = ["production", "api", "v2"]

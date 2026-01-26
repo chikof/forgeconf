@@ -1,0 +1,11 @@
+app_name = "MyApp"
+
+[database]
+host = "db.example.com"
+port = 5432
+username = "dbuser"
+database = "myapp_db"
+
+[logging]
+level = "info"
+format = "json"

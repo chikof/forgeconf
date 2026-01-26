@@ -18,6 +18,7 @@ regex = ["forgeconf_core/regex"]
 cli = ["forgeconf_core/cli"]
 validators = ["forgeconf_core/validators"]
 parse = ["forgeconf_core/parse"]
+miette = ["forgeconf_core/miette"]
 
 [dependencies]
 forgeconf_macros = { version = "=0.2.0", path = "../forgeconf_macros" }
@@ -25,8 +26,8 @@ forgeconf_core = { version = "=0.2.0", path = "../forgeconf_core" }
 
 [dev-dependencies]
 regex = "1.11.1"
-criterion = "0.5"
-config = "0.14"
+criterion = "0.8.1"
+config = "0.15.19"
 serde = { version = "1.0", features = ["derive"] }
 
 [[bench]]

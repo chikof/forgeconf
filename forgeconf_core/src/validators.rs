@@ -213,7 +213,7 @@ mod tests {
         let err = validator(&0, "retries").unwrap_err();
         assert!(matches!(
             err,
-            ConfigError::TypeMismatch { field, expected, found }
+            ConfigError::TypeMismatch { field, expected, found, .. }
                 if field == "retries" && expected == "between 1 and 3" && found == "0"
         ));
     }
@@ -224,7 +224,7 @@ mod tests {
         let err = validator(&"ab".to_string(), "token").unwrap_err();
         assert!(matches!(
             err,
-            ConfigError::TypeMismatch { field, expected, found }
+            ConfigError::TypeMismatch { field, expected, found, .. }
                 if field == "token" && expected == "length >= 3" && found == "length 2"
         ));
     }
@@ -235,7 +235,7 @@ mod tests {
         let err = validator(&vec![1, 2, 3], "bytes").unwrap_err();
         assert!(matches!(
             err,
-            ConfigError::TypeMismatch { field, expected, found }
+            ConfigError::TypeMismatch { field, expected, found, .. }
                 if field == "bytes" && expected == "length <= 2" && found == "length 3"
         ));
     }
@@ -258,7 +258,7 @@ mod tests {
         let err = validator(&"warn".to_string(), "level").unwrap_err();
         assert!(matches!(
             err,
-            ConfigError::TypeMismatch { field, expected, found }
+            ConfigError::TypeMismatch { field, expected, found, .. }
                 if field == "level" && expected.contains("debug") && found == "warn"
         ));
     }

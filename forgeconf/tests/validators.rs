@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use forgeconf::{forgeconf, ConfigError, ConfigNode};
+use forgeconf::{ConfigError, ConfigNode, forgeconf};
 
 #[derive(Debug)]
 #[forgeconf]
@@ -74,7 +74,7 @@ fn range_validator_fails() {
     let err = ValidatorConfig::load_from(&node).unwrap_err();
     assert!(matches!(
         err,
-        ConfigError::TypeMismatch { field, expected, found }
+        ConfigError::TypeMismatch { field, expected, found, .. }
             if field == "port" && expected == "between 1000 and 2000" && found == "9000"
     ));
 }
@@ -97,7 +97,7 @@ fn one_of_validator_reports_error() {
     let err = ValidatorConfig::load_from(&node).unwrap_err();
     assert!(matches!(
         err,
-        ConfigError::TypeMismatch { field, expected, found }
+        ConfigError::TypeMismatch { field, expected, found, .. }
             if field == "log_level" && expected.contains("debug") && found == "trace"
     ));
 }

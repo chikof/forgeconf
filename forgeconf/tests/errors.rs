@@ -1,4 +1,4 @@
-use forgeconf::{forgeconf, ConfigError};
+use forgeconf::{ConfigError, forgeconf};
 
 #[derive(Debug)]
 #[forgeconf(config(path = "tests/fixtures/basic.toml"))]
@@ -15,7 +15,7 @@ fn missing_fields_raise_useful_errors() {
         .unwrap_err();
 
     match err {
-        ConfigError::MissingValue(name) => assert_eq!(name, "missing"),
+        ConfigError::MissingValue { field, .. } => assert_eq!(field, "missing"),
         other => panic!("unexpected error: {other:?}"),
     }
 }

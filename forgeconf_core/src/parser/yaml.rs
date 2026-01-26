@@ -7,7 +7,8 @@ use crate::{ConfigError, ConfigNode};
 /// Parse YAML content into a ConfigNode tree.
 /// If multiple YAML documents are present, only the first is used.
 pub fn parse(input: &str) -> Result<ConfigNode, ConfigError> {
-    let docs = YamlLoader::load_from_str(input).map_err(ConfigError::Yaml)?;
+    let docs = YamlLoader::load_from_str(input)
+        .map_err(|source| ConfigError::Yaml { source, span: None })?;
     let document = docs
         .into_iter()
         .next()
@@ -152,6 +153,6 @@ mod tests {
     fn returns_error_on_invalid_yaml() {
         let input = "invalid:\n  - broken\n - indentation";
         let err = parse(input).unwrap_err();
-        assert!(matches!(err, ConfigError::Yaml(_)));
+        assert!(matches!(err, ConfigError::Yaml { .. }));
     }
 }

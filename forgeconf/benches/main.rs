@@ -25,9 +25,10 @@
 #![allow(dead_code, unused_imports)]
 
 use std::fs;
+use std::hint::black_box;
 use std::path::Path;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
 mod comparison;
 
