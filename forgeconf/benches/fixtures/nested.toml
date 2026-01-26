@@ -1,0 +1,30 @@
+# Nested configuration for complex benchmarks
+app_name = "benchmark-app"
+version = "1.0.0"
+
+[server]
+host = "0.0.0.0"
+port = 8080
+max_connections = 1000
+timeout_ms = 5000
+
+[database]
+url = "postgres://localhost/mydb"
+pool_size = 10
+max_overflow = 20
+timeout = 30
+
+[logging]
+level = "info"
+format = "json"
+output = "/var/log/app.log"
+
+[cache]
+enabled = true
+ttl = 3600
+max_size = 1000
+
+[features]
+feature_a = true
+feature_b = false
+feature_c = true
