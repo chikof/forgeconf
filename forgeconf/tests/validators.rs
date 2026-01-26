@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use forgeconf::{ConfigError, ConfigNode, forgeconf};
+use forgeconf::{forgeconf, ConfigError, ConfigNode};
 
 #[derive(Debug)]
 #[forgeconf]
