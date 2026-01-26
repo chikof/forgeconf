@@ -1,8 +1,10 @@
 use crate::{ConfigError, ConfigNode};
 
+#[cfg(feature = "cli")]
 mod cli;
 mod file;
 
+#[cfg(feature = "cli")]
 pub use cli::CliArguments;
 pub use file::ConfigFile;
 

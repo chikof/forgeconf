@@ -1,3 +1,5 @@
+#![cfg(feature = "validators")]
+
 use std::collections::BTreeMap;
 
 use forgeconf::{forgeconf, ConfigError, ConfigNode};

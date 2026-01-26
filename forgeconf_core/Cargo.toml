@@ -9,11 +9,14 @@ repository = "https://github.com/chikof/forgeconf"
 readme = "../README.md"
 
 [features]
-default = ["toml", "regex"]
+default = ["toml", "cli", "validators", "parse"]
 toml = ["dep:toml"]
 yaml = ["dep:yaml-rust2"]
 json = ["dep:jzon"]
 regex = ["dep:regex"]
+cli = []
+validators = []
+parse = []
 
 [dependencies]
 thiserror = "2.0.17"

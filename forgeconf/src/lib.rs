@@ -27,10 +27,20 @@
 //! }
 //! ```
 
+#[cfg(all(feature = "parse", feature = "json"))]
+pub use forgeconf_core::parse_json;
+#[cfg(feature = "parse")]
+pub use forgeconf_core::parse_str;
+#[cfg(all(feature = "parse", feature = "toml"))]
+pub use forgeconf_core::parse_toml;
+#[cfg(all(feature = "parse", feature = "yaml"))]
+pub use forgeconf_core::parse_yaml;
+#[cfg(feature = "validators")]
+pub use forgeconf_core::validators;
+#[cfg(feature = "cli")]
+pub use forgeconf_core::CliArguments;
 pub use forgeconf_core::{
     merge_nodes,
-    validators,
-    CliArguments,
     ConfigBuilder,
     ConfigError,
     ConfigFile,

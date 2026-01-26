@@ -1,3 +1,5 @@
+#![cfg(feature = "cli")]
+
 use forgeconf::{forgeconf, CliArguments, ConfigError};
 
 #[forgeconf(config(path = "tests/fixtures/basic.toml"))]

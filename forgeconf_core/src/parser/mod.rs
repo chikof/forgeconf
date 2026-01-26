@@ -76,6 +76,7 @@ pub fn load_from_path(
 }
 
 /// Parse an in-memory string.
+#[cfg(feature = "parse")]
 pub fn parse_str(input: &str, format: FileFormat) -> Result<ConfigNode, ConfigError> {
     match format {
         FileFormat::Toml => {
@@ -109,6 +110,24 @@ pub fn parse_str(input: &str, format: FileFormat) -> Result<ConfigNode, ConfigEr
             }
         },
     }
+}
+
+/// Parse TOML text into a ConfigNode.
+#[cfg(all(feature = "parse", feature = "toml"))]
+pub fn parse_toml(input: &str) -> Result<ConfigNode, ConfigError> {
+    toml::parse(input)
+}
+
+/// Parse YAML text into a ConfigNode.
+#[cfg(all(feature = "parse", feature = "yaml"))]
+pub fn parse_yaml(input: &str) -> Result<ConfigNode, ConfigError> {
+    yaml::parse(input)
+}
+
+/// Parse JSON text into a ConfigNode.
+#[cfg(all(feature = "parse", feature = "json"))]
+pub fn parse_json(input: &str) -> Result<ConfigNode, ConfigError> {
+    json::parse(input)
 }
 
 fn infer_from_extension(path: &Path) -> Result<FileFormat, ConfigError> {

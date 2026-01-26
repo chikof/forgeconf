@@ -21,6 +21,9 @@ pub fn render(
         .iter()
         .map(render_field_init);
 
+    // Generate parse methods for each enabled format
+    let parse_methods = generate_parse_methods(ident);
+
     let result = quote! {
         #item
 
@@ -37,6 +40,8 @@ pub fn render(
                     #(#field_inits),*
                 })
             }
+
+            #parse_methods
         }
 
         pub struct #loader_ident {
@@ -44,6 +49,7 @@ pub fn render(
         }
 
         impl #loader_ident {
+            #[cfg(feature = "cli")]
             pub fn with_cli(mut self, priority: u8) -> Self {
                 self.builder = self
                     .builder
@@ -78,6 +84,67 @@ pub fn render(
     };
 
     Ok(result)
+}
+
+fn generate_parse_methods(_ident: &syn::Ident) -> TokenStream {
+    // Generate parse methods with cfg gates so they're conditionally compiled
+    // in the user's crate based on their enabled features.
+    // We always generate all methods with cfg attributes rather than checking
+    // features at macro expansion time, since we need to check the user's features.
+    quote! {
+        /// Parse TOML text directly into this configuration struct.
+        ///
+        /// # Example
+        /// ```no_run
+        /// let config_text = r#"
+        ///     port = 8080
+        ///     host = "localhost"
+        /// "#;
+        /// let config = MyConfig::parse_toml(config_text)?;
+        /// # Ok::<(), ::forgeconf::ConfigError>(())
+        /// ```
+        #[cfg(all(feature = "parse", feature = "toml"))]
+        pub fn parse_toml(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
+            let node = ::forgeconf::parse_toml(input)?;
+            Self::load_from(&node)
+        }
+
+        /// Parse YAML text directly into this configuration struct.
+        ///
+        /// # Example
+        /// ```no_run
+        /// let config_text = r#"
+        ///     port: 8080
+        ///     host: localhost
+        /// "#;
+        /// let config = MyConfig::parse_yaml(config_text)?;
+        /// # Ok::<(), ::forgeconf::ConfigError>(())
+        /// ```
+        #[cfg(all(feature = "parse", feature = "yaml"))]
+        pub fn parse_yaml(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
+            let node = ::forgeconf::parse_yaml(input)?;
+            Self::load_from(&node)
+        }
+
+        /// Parse JSON text directly into this configuration struct.
+        ///
+        /// # Example
+        /// ```no_run
+        /// let config_text = r#"
+        ///     {
+        ///         "port": 8080,
+        ///         "host": "localhost"
+        ///     }
+        /// "#;
+        /// let config = MyConfig::parse_json(config_text)?;
+        /// # Ok::<(), ::forgeconf::ConfigError>(())
+        /// ```
+        #[cfg(all(feature = "parse", feature = "json"))]
+        pub fn parse_json(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
+            let node = ::forgeconf::parse_json(input)?;
+            Self::load_from(&node)
+        }
+    }
 }
 
 fn render_config_addition(cfg: &ConfigFile) -> TokenStream {

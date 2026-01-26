@@ -10,11 +10,14 @@ readme = "../README.md"
 repository = "https://github.com/chikof/forgeconf"
 
 [features]
-default = ["toml", "yaml", "regex"]
+default = ["toml", "yaml", "cli", "validators", "parse"]
 toml = ["forgeconf_macros/toml", "forgeconf_core/toml"]
 yaml = ["forgeconf_macros/yaml", "forgeconf_core/yaml"]
 json = ["forgeconf_macros/json", "forgeconf_core/json"]
 regex = ["forgeconf_core/regex"]
+cli = ["forgeconf_core/cli"]
+validators = ["forgeconf_core/validators"]
+parse = ["forgeconf_core/parse"]
 
 [dependencies]
 forgeconf_macros = { version = "=0.2.0", path = "../forgeconf_macros" }
