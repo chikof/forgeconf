@@ -5,6 +5,7 @@ Forgeconf is a small attribute macro and runtime for loading configuration files
 ## Table of Contents
 
 <!--toc:start-->
+
 - [Forgeconf](#forgeconf)
   - [Highlights](#highlights)
   - [Install](#install)
@@ -16,7 +17,7 @@ Forgeconf is a small attribute macro and runtime for loading configuration files
   - [Format support](#format-support)
   - [Releasing](#releasing)
   - [License](#license)
-<!--toc:end-->
+  <!--toc:end-->
 
 ## Highlights
 
@@ -32,14 +33,14 @@ Add Forgeconf to your workspace:
 
 ```toml
 [dependencies]
-forgeconf = "0.1"
+forgeconf = "0.3"
 ```
 
 The crate enables TOML, YAML, and regex-powered validators by default. Add `json` if you want JSON support, or disable defaults to pick a subset:
 
 ```toml
 [dependencies.forgeconf]
-version = "0.1"
+version = "0.3"
 default-features = false
 features = ["json", "regex"]
 ```
@@ -75,25 +76,25 @@ fn main() -> Result<(), ConfigError> {
 
 `#[forgeconf(...)]` accepts zero or more `config(...)` entries. Each entry takes:
 
-| key        | type            | description                                   |
-|------------|-----------------|-----------------------------------------------|
-| `path`     | string (req.)   | Relative or absolute path to the file         |
-| `format`   | `"toml" / ...`  | Overrides format detection                    |
-| `priority` | `u8`            | Higher numbers win when merging (default 10)  |
+| key        | type           | description                                  |
+| ---------- | -------------- | -------------------------------------------- |
+| `path`     | string (req.)  | Relative or absolute path to the file        |
+| `format`   | `"toml" / ...` | Overrides format detection                   |
+| `priority` | `u8`           | Higher numbers win when merging (default 10) |
 
 ### Field modifiers
 
 Use `#[field(...)]` on struct fields to fine tune the behaviour:
 
-| option        | type         | effect |
-|---------------|--------------|--------|
-| `name`        | string       | Rename the lookup key                         |
-| `insensitive` | bool         | Perform case-insensitive lookups              |
-| `env`         | string       | Pull from an environment variable first       |
-| `cli`         | string       | Check `--<cli>=value` CLI flags before files  |
-| `default`     | expression   | Fall back to the provided literal/expression  |
-| `optional`    | bool         | Treat `Option<T>` fields as optional          |
-| `validate`    | expression   | Invoke a validator after parsing (repeatable) |
+| option        | type       | effect                                        |
+| ------------- | ---------- | --------------------------------------------- |
+| `name`        | string     | Rename the lookup key                         |
+| `insensitive` | bool       | Perform case-insensitive lookups              |
+| `env`         | string     | Pull from an environment variable first       |
+| `cli`         | string     | Check `--<cli>=value` CLI flags before files  |
+| `default`     | expression | Fall back to the provided literal/expression  |
+| `optional`    | bool       | Treat `Option<T>` fields as optional          |
+| `validate`    | expression | Invoke a validator after parsing (repeatable) |
 
 All lookups resolve in the following order:
 
@@ -156,11 +157,11 @@ let cfg = AppConfig::loader()
 
 ## Format support
 
-| Feature | Dependency   | File extensions         |
-|---------|--------------|-------------------------|
-| `toml`  | `toml` crate | `.toml`                 |
-| `yaml`  | `yaml-rust2` | `.yml`, `.yaml`         |
-| `json`  | `jzon`       | `.json`                 |
+| Feature | Dependency   | File extensions |
+| ------- | ------------ | --------------- |
+| `toml`  | `toml` crate | `.toml`         |
+| `yaml`  | `yaml-rust2` | `.yml`, `.yaml` |
+| `json`  | `jzon`       | `.json`         |
 
 Each parser lives behind a feature flag. Disable defaults if you want to ship with no parsers enabled.
 
