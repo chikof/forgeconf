@@ -413,7 +413,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forgeconf"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "config",
  "criterion",
@@ -425,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "forgeconf_core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "jzon",
  "miette",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "forgeconf_macros"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "forgeconf_core",
  "proc-macro2",

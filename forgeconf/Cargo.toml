@@ -1,7 +1,7 @@
 [package]
 name = "forgeconf"
 description = "Declarative configuration loader for Rust structs powered by attribute macros."
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Chiko <chiko@envs.net>"]
 license = "MIT"
@@ -21,8 +21,8 @@ parse = ["forgeconf_core/parse"]
 miette = ["forgeconf_core/miette"]
 
 [dependencies]
-forgeconf_macros = { version = "=0.2.0", path = "../forgeconf_macros" }
-forgeconf_core = { version = "=0.2.0", path = "../forgeconf_core" }
+forgeconf_macros = { version = "=0.3.0", path = "../forgeconf_macros" }
+forgeconf_core = { version = "=0.3.0", path = "../forgeconf_core" }
 
 [dev-dependencies]
 regex = "1.11.1"

@@ -1,7 +1,7 @@
 [package]
 name = "forgeconf_macros"
 description = "Procedural macro crate for Forgeconf."
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Chiko <chiko@envs.net>"]
 license = "MIT"
@@ -18,7 +18,7 @@ json = ["forgeconf_core/json"]
 proc-macro = true
 
 [dependencies]
-forgeconf_core = { version = "=0.2.0", path = "../forgeconf_core" }
+forgeconf_core = { version = "=0.3.0", path = "../forgeconf_core" }
 proc-macro2 = "1.0.106"
 quote = "1.0.44"
 syn = { version = "2.0.114", features = ["full", "extra-traits"] }
