@@ -46,7 +46,14 @@ jobs:
 
       - name: Generate release notes with git-cliff
         run: |
-          git cliff --config cliff.toml --tag "${GITHUB_REF_NAME}" > release-notes.md
+          # Get the previous tag to generate notes only for the current release
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${GITHUB_REF_NAME}$" | head -n1 || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            git cliff --config cliff.toml "${PREV_TAG}..${GITHUB_REF_NAME}" > release-notes.md
+          else
+            # First release - include all commits
+            git cliff --config cliff.toml --tag "${GITHUB_REF_NAME}" > release-notes.md
+          fi
 
       - name: Append crate versions
         run: |
