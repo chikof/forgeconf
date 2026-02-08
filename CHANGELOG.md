@@ -3,11 +3,26 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.4.1](https://github.com/chikof/forgeconf/compare/v0.4.0..v0.4.1) - 2026-02-08
+
+### Bug Fixes
+
+- suppress unexpected_cfgs warnings on generated parse methods - ([3a72518](https://github.com/chikof/forgeconf/commit/3a7251880d9763271f072ea42f6f1e4d49e2d260)) - Chiko
+
+### Miscellaneous Chores
+
+- forgot to format - ([1067c13](https://github.com/chikof/forgeconf/commit/1067c137bdd0051d66eb8367c062b1e0c094d761)) - Chiko
+
+---
 ## [0.4.0](https://github.com/chikof/forgeconf/compare/v0.3.0..v0.4.0) - 2026-02-08
 
 ### Bug Fixes
 
 -  [**breaking**]remove cfg attributes from macro to prevent check-cfg warnings - ([25df425](https://github.com/chikof/forgeconf/commit/25df425caaa1f15a7f6d85a4a5acbe8a88b38db5)) - Chiko
+
+### Miscellaneous Chores
+
+- **(release)** prepare v0.4.0 - ([74a190b](https://github.com/chikof/forgeconf/commit/74a190b388f99ba9b3b17d9e55e1aa39a61ed603)) - Chiko
 
 ### Ci
 
