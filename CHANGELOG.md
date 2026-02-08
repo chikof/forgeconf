@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.4.0](https://github.com/chikof/forgeconf/compare/v0.3.0..v0.4.0) - 2026-02-08
+
+### Bug Fixes
+
+-  [**breaking**]remove cfg attributes from macro to prevent check-cfg warnings - ([25df425](https://github.com/chikof/forgeconf/commit/25df425caaa1f15a7f6d85a4a5acbe8a88b38db5)) - Chiko
+
+### Ci
+
+- **(release)** only generate changelog for the current release - ([efe88d0](https://github.com/chikof/forgeconf/commit/efe88d09a6c66edc8c630085cbf4dc96684dffac)) - Chiko
+
+---
 ## [0.3.0](https://github.com/chikof/forgeconf/compare/v0.2.0..v0.3.0) - 2026-01-28
 
 ### Bug Fixes
@@ -18,6 +29,7 @@ All notable changes to this project will be documented in this file. See [conven
 ### Miscellaneous Chores
 
 - **(release)** add automated script and docs - ([485d2a3](https://github.com/chikof/forgeconf/commit/485d2a31aaed1eb9b20cfed20099dea302bbe2f8)) - chikof
+- **(release)** prepare v0.3.0 - ([7df8b2d](https://github.com/chikof/forgeconf/commit/7df8b2d36bb4a658c1d6f54cd4ae177c94398723)) - Chiko
 - add benchmarks - ([ee93311](https://github.com/chikof/forgeconf/commit/ee9331124434e338f825165147b9e5ea06a7ba76)) - chikof
 - formatting - ([1e67c3a](https://github.com/chikof/forgeconf/commit/1e67c3a522ac7158874e44d5c023ef789dd29988)) - Chiko
 
