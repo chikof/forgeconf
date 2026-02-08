@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Expr, ItemStruct, LitStr, Result};
 
-use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr, is_scalar_type};
+use crate::model::{is_scalar_type, ConfigFile, FieldSpec, ForgeconfAttr};
 
 pub fn render(
     item: &ItemStruct,
