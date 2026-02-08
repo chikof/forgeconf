@@ -50,7 +50,7 @@ Disable `regex` if you want to skip the `regex` crate entirely, or re-enable it 
 ## Quick start
 
 ```rust,no_run
-use forgeconf::{forgeconf, ConfigError};
+use forgeconf::{forgeconf, CliArguments, ConfigError};
 
 #[forgeconf(config(path = "config/app.toml"))]
 struct AppConfig {
@@ -63,7 +63,7 @@ struct AppConfig {
 fn main() -> Result<(), ConfigError> {
     let cfg = AppConfig::loader()
         .with_config() // load every `config(...)` entry
-        .with_cli(200) // merge `--key=value` CLI arguments
+        .add_source(CliArguments::new().with_priority(200)) // merge `--key=value` CLI arguments
         .load()?;
 
     println!("listening on {}", cfg.port);
@@ -100,7 +100,7 @@ All lookups resolve in the following order:
 
 1. Field-level CLI override (`#[field(cli = "...")]`)
 2. Field-level env override (`#[field(env = "...")]`)
-3. Sources registered on the loader (`with_cli`, `with_config`, or `add_source`)
+3. Sources registered on the loader (`with_config` or `add_source`)
 
 #### Validators
 
@@ -142,8 +142,7 @@ Each helper returns a closure that you can combine or wrap to build higher-level
 The generated `<Struct>Loader` exposes:
 
 - `with_config()` – loads every `config(...)` entry from the attribute.
-- `with_cli(priority)` – merges parsed CLI arguments at the provided priority.
-- `add_source(source)` – supply any custom `ConfigSource`.
+- `add_source(source)` – supply any custom `ConfigSource` (including `CliArguments`).
 - `load()` – merges the queued sources and deserializes the struct.
 
 You can construct sources manually using items re-exported from the crate:

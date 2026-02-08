@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Expr, ItemStruct, LitStr, Result};
 
-use crate::model::{is_scalar_type, ConfigFile, FieldSpec, ForgeconfAttr};
+use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr, is_scalar_type};
 
 pub fn render(
     item: &ItemStruct,
@@ -49,14 +49,6 @@ pub fn render(
         }
 
         impl #loader_ident {
-            #[cfg(feature = "cli")]
-            pub fn with_cli(mut self, priority: u8) -> Self {
-                self.builder = self
-                    .builder
-                    .add_source(::forgeconf::CliArguments::new().with_priority(priority));
-                self
-            }
-
             pub fn with_config(mut self) -> Self {
                 #(#add_config)*
                 self
@@ -87,12 +79,15 @@ pub fn render(
 }
 
 fn generate_parse_methods(_ident: &syn::Ident) -> TokenStream {
-    // Generate parse methods with cfg gates so they're conditionally compiled
-    // in the user's crate based on their enabled features.
-    // We always generate all methods with cfg attributes rather than checking
-    // features at macro expansion time, since we need to check the user's features.
+    // Generate parse methods without cfg gates. The methods will only be callable
+    // if the corresponding parse_* functions exist in forgeconf (controlled by
+    // forgeconf's features). If the user tries to call parse_toml() but
+    // forgeconf doesn't have the toml+parse features enabled, they'll get a
+    // clear compile error about parse_toml not existing.
     quote! {
         /// Parse TOML text directly into this configuration struct.
+        ///
+        /// Requires the `toml` and `parse` features to be enabled on `forgeconf`.
         ///
         /// # Example
         /// ```no_run
@@ -103,13 +98,14 @@ fn generate_parse_methods(_ident: &syn::Ident) -> TokenStream {
         /// let config = MyConfig::parse_toml(config_text)?;
         /// # Ok::<(), ::forgeconf::ConfigError>(())
         /// ```
-        #[cfg(all(feature = "parse", feature = "toml"))]
         pub fn parse_toml(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
             let node = ::forgeconf::parse_toml(input)?;
             Self::load_from(&node)
         }
 
         /// Parse YAML text directly into this configuration struct.
+        ///
+        /// Requires the `yaml` and `parse` features to be enabled on `forgeconf`.
         ///
         /// # Example
         /// ```no_run
@@ -120,13 +116,14 @@ fn generate_parse_methods(_ident: &syn::Ident) -> TokenStream {
         /// let config = MyConfig::parse_yaml(config_text)?;
         /// # Ok::<(), ::forgeconf::ConfigError>(())
         /// ```
-        #[cfg(all(feature = "parse", feature = "yaml"))]
         pub fn parse_yaml(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
             let node = ::forgeconf::parse_yaml(input)?;
             Self::load_from(&node)
         }
 
         /// Parse JSON text directly into this configuration struct.
+        ///
+        /// Requires the `json` and `parse` features to be enabled on `forgeconf`.
         ///
         /// # Example
         /// ```no_run
@@ -139,7 +136,6 @@ fn generate_parse_methods(_ident: &syn::Ident) -> TokenStream {
         /// let config = MyConfig::parse_json(config_text)?;
         /// # Ok::<(), ::forgeconf::ConfigError>(())
         /// ```
-        #[cfg(all(feature = "parse", feature = "json"))]
         pub fn parse_json(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
             let node = ::forgeconf::parse_json(input)?;
             Self::load_from(&node)
