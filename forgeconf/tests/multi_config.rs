@@ -1,4 +1,4 @@
-use forgeconf::{forgeconf, ConfigError};
+use forgeconf::{ConfigError, forgeconf};
 
 #[forgeconf(
     config(path = "tests/fixtures/priority-base.toml", priority = 5),

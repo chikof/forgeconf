@@ -5,7 +5,7 @@
 //!
 //! Run with: cargo run --example error_showcase --features miette
 
-use forgeconf::{forgeconf, ConfigError};
+use forgeconf::{ConfigError, forgeconf};
 
 #[derive(Debug)]
 #[forgeconf]

@@ -4,7 +4,7 @@ use syn::{ItemStruct, Result};
 mod model;
 mod render;
 
-use model::{collect_fields, ForgeconfAttr};
+use model::{ForgeconfAttr, collect_fields};
 
 /// Derive loader and parsing logic for a configuration struct.
 #[proc_macro_attribute]

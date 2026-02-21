@@ -1,4 +1,4 @@
-use forgeconf::{forgeconf, ConfigError};
+use forgeconf::{ConfigError, forgeconf};
 
 #[forgeconf]
 struct ServiceConfig {

@@ -7,7 +7,7 @@
 //! --debug=true
 
 #[cfg(feature = "cli")]
-use forgeconf::{forgeconf, CliArguments};
+use forgeconf::{CliArguments, forgeconf};
 
 #[cfg(feature = "cli")]
 #[derive(Debug)]

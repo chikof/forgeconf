@@ -1,6 +1,6 @@
 #![cfg(feature = "parse")]
 
-use forgeconf::{forgeconf, ConfigError};
+use forgeconf::{ConfigError, forgeconf};
 
 #[forgeconf]
 struct ParseConfig {

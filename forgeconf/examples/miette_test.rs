@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo run --example miette_test --features miette
 
-use forgeconf::{forgeconf, ConfigError};
+use forgeconf::{ConfigError, forgeconf};
 
 #[derive(Debug)]
 #[forgeconf]

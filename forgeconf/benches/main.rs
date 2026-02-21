@@ -28,7 +28,7 @@ use std::fs;
 use std::hint::black_box;
 use std::path::Path;
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
 mod comparison;
 

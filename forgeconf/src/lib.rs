@@ -27,6 +27,8 @@
 //! }
 //! ```
 
+#[cfg(feature = "cli")]
+pub use forgeconf_core::CliArguments;
 #[cfg(all(feature = "parse", feature = "json"))]
 pub use forgeconf_core::parse_json;
 #[cfg(feature = "parse")]
@@ -37,11 +39,7 @@ pub use forgeconf_core::parse_toml;
 pub use forgeconf_core::parse_yaml;
 #[cfg(feature = "validators")]
 pub use forgeconf_core::validators;
-#[cfg(feature = "cli")]
-pub use forgeconf_core::CliArguments;
 pub use forgeconf_core::{
-    load_from_path,
-    merge_nodes,
     ConfigBuilder,
     ConfigError,
     ConfigFile,
@@ -49,5 +47,7 @@ pub use forgeconf_core::{
     ConfigSource,
     FileFormat,
     FromNode,
+    load_from_path,
+    merge_nodes,
 };
 pub use forgeconf_macros::forgeconf;

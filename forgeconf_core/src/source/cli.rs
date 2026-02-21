@@ -78,11 +78,7 @@ fn parse_flag(arg: &str) -> Option<(&str, &str)> {
         .next()?
         .trim();
 
-    if key.is_empty() {
-        None
-    } else {
-        Some((key, value))
-    }
+    if key.is_empty() { None } else { Some((key, value)) }
 }
 
 fn insert_path(tree: &mut BTreeMap<String, ConfigNode>, path: &str, value: &str) {

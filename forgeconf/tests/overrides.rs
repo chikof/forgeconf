@@ -1,6 +1,6 @@
 #![cfg(feature = "cli")]
 
-use forgeconf::{forgeconf, CliArguments, ConfigError};
+use forgeconf::{CliArguments, ConfigError, forgeconf};
 
 #[forgeconf(config(path = "tests/fixtures/basic.toml"))]
 struct OverrideConfig {

@@ -1,4 +1,4 @@
-use forgeconf::{forgeconf, ConfigError};
+use forgeconf::{ConfigError, forgeconf};
 
 #[derive(Debug)]
 #[forgeconf(config(path = "tests/fixtures/basic.toml"))]
