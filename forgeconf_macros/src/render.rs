@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Expr, ItemStruct, LitStr, Result};
 
-use crate::model::{is_scalar_type, ConfigFile, FieldSpec, ForgeconfAttr};
+use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr, is_scalar_type};
 
 pub fn render(
     item: &ItemStruct,
@@ -149,7 +149,7 @@ fn generate_parse_methods(_ident: &syn::Ident) -> TokenStream {
 }
 
 fn render_config_addition(cfg: &ConfigFile) -> TokenStream {
-    let path = LitStr::new(&cfg.path, proc_macro2::Span::call_site());
+    let path = &cfg.path;
     let format_chain = cfg
         .format
         .as_ref()
@@ -175,6 +175,7 @@ fn render_config_addition(cfg: &ConfigFile) -> TokenStream {
 
     quote! {
         self.builder = self.builder.add_source(
+            // Expect path to return a value that contains a string
             ::forgeconf::ConfigFile::new(#path)
                 #format_chain
                 #priority_chain

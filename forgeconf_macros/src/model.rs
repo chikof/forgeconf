@@ -11,7 +11,7 @@ pub struct ForgeconfAttr {
 }
 
 pub struct ConfigFile {
-    pub path: String,
+    pub path: Expr,
     pub format: Option<FileFormat>,
     pub priority: Option<u8>,
 }
@@ -72,8 +72,8 @@ impl ConfigFile {
                 .as_str()
             {
                 "path" => {
-                    let lit: LitStr = input.parse()?;
-                    path = Some(lit.value());
+                    let expr: Expr = input.parse()?;
+                    path = Some(expr);
                 },
                 "format" => {
                     let lit: LitStr = input.parse()?;
@@ -177,6 +177,7 @@ impl FieldOptions {
         Ok(options)
     }
 
+    // TODO: refactor this in a more efficient way
     fn merge(&mut self, other: FieldOptions) -> Result<()> {
         if other
             .rename
@@ -265,49 +266,49 @@ impl Parse for MetaEntry {
 }
 
 pub fn is_scalar_type(ty: &Type) -> bool {
-    if let Type::Path(path) = ty {
-        if let Some(segment) = path
+    if let Type::Path(path) = ty
+        && let Some(segment) = path
             .path
             .segments
             .last()
-        {
-            let ident = segment
-                .ident
-                .to_string();
-            return matches!(
-                ident.as_str(),
-                "String"
-                    | "bool"
-                    | "u8"
-                    | "u16"
-                    | "u32"
-                    | "u64"
-                    | "u128"
-                    | "i8"
-                    | "i16"
-                    | "i32"
-                    | "i64"
-                    | "i128"
-                    | "isize"
-                    | "usize"
-                    | "f32"
-                    | "f64"
-                    | "char"
-            ) || ident == "Vec";
-        }
+    {
+        let ident = segment
+            .ident
+            .to_string();
+        return matches!(
+            ident.as_str(),
+            "String"
+                | "bool"
+                | "u8"
+                | "u16"
+                | "u32"
+                | "u64"
+                | "u128"
+                | "i8"
+                | "i16"
+                | "i32"
+                | "i64"
+                | "i128"
+                | "isize"
+                | "usize"
+                | "f32"
+                | "f64"
+                | "char"
+        ) || ident == "Vec";
     }
+
     false
 }
 
 fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(path) = ty {
-        if let Some(segment) = path
+    if let Type::Path(path) = ty
+        && let Some(segment) = path
             .path
             .segments
             .last()
-        {
-            return segment.ident == "Option";
-        }
+    {
+        return segment.ident == "Option";
     }
+
     false
 }

@@ -1,13 +1,17 @@
 use forgeconf::{ConfigError, forgeconf};
 
-#[forgeconf(config(path = "tests/fixtures/basic.toml"))]
+fn path() -> String {
+    "tests/fixtures/basic.toml".to_string()
+}
+
+#[forgeconf(config(path = path()))]
 struct BasicConfig {
     port: u16,
     database_url: String,
 }
 
 #[test]
-fn loads_configuration_file() -> Result<(), ConfigError> {
+fn dynamic_path_loading() -> Result<(), ConfigError> {
     let cfg = BasicConfig::loader()
         .with_config()
         .load()?;
