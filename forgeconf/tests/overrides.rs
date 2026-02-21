@@ -11,7 +11,9 @@ struct OverrideConfig {
 
 #[test]
 fn cli_and_env_sources_override_files() -> Result<(), ConfigError> {
-    std::env::set_var("FORGECONF_DATABASE_URL", "postgres://override");
+    unsafe {
+        std::env::set_var("FORGECONF_DATABASE_URL", "postgres://override");
+    };
 
     let cfg = OverrideConfig::loader()
         .with_config()
@@ -25,6 +27,8 @@ fn cli_and_env_sources_override_files() -> Result<(), ConfigError> {
     assert_eq!(cfg.port, 9000);
     assert_eq!(cfg.database_url, "postgres://override");
 
-    std::env::remove_var("FORGECONF_DATABASE_URL");
+    unsafe {
+        std::env::remove_var("FORGECONF_DATABASE_URL");
+    };
     Ok(())
 }
