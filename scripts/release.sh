@@ -23,12 +23,13 @@ if ! command -v git-cliff >/dev/null 2>&1; then
     exit 127
 fi
 
-if ! command -v cargo set-version >/dev/null 2>&1; then
+if ! cargo set-version --version >/dev/null 2>&1; then
     echo "cargo set-version is required; install it via 'cargo install cargo-edit'" >&2
     exit 127
 fi
 
-if ! git diff --quiet --ignore-submodules --exit-code; then
+if ! git diff --quiet --cached --ignore-submodules --exit-code || \
+   ! git diff --quiet --ignore-submodules --exit-code; then
     echo "Working tree is dirty. Commit or stash changes before releasing." >&2
     exit 1
 fi
@@ -43,10 +44,12 @@ cargo set-version --workspace "${VERSION}"
 
 git cliff --config cliff.toml --tag "${TAG}" -o CHANGELOG.md
 
-cargo fmt --all
+cargo +nightly fmt --all
 cargo test --workspace --all-features
 
-git add CHANGELOG.md Cargo.lock forgeconf/Cargo.toml forgeconf_core/Cargo.toml forgeconf_macros/Cargo.toml
+git add CHANGELOG.md Cargo.lock
+git diff --name-only HEAD | grep 'Cargo\.toml' | xargs -r git add
+git diff --cached --name-only | grep 'Cargo\.toml' | xargs -r git add
 
 git commit -m "chore(release): prepare ${TAG}"
 
