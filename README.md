@@ -24,7 +24,7 @@ Forgeconf is a small attribute macro and runtime for loading configuration files
 - 🧱 **Single source of truth** – annotate your struct once and Forgeconf generates the loader, builder, and conversion logic.
 - 🧪 **Compile-time safety** – missing values or type mismatches become compile errors inside the generated code, so you fail fast during development.
 - 🔌 **Composable sources** – merge any combination of files, CLI flags, and environment variables with explicit priorities.
-- 🧩 **Nested structures** – nested structs can be annotated with `#[forgeconf]` as well, enabling deeply nested configuration trees without boilerplate.
+- 🧩 **Nested structures** – annotate inner structs with `#[forgeconf]` and mark the field with `#[field(nested)]` to map configuration sub-sections without boilerplate.
 - 🧷 **Format agnostic** – enable just the parsers you need through Cargo features (`toml`, `yaml`, `json`).
 
 ## Install
@@ -62,7 +62,6 @@ struct AppConfig {
 
 fn main() -> Result<(), ConfigError> {
     let cfg = AppConfig::loader()
-        .with_config() // load every `config(...)` entry
         .add_source(CliArguments::new().with_priority(200)) // merge `--key=value` CLI arguments
         .load()?;
 
@@ -95,12 +94,13 @@ Use `#[field(...)]` on struct fields to fine tune the behaviour:
 | `default`     | expression | Fall back to the provided literal/expression  |
 | `optional`    | bool       | Treat `Option<T>` fields as optional          |
 | `validate`    | expression | Invoke a validator after parsing (repeatable) |
+| `nested`      | flag       | Treat the field as a nested `#[forgeconf]` struct, resolved from a sub-section of the same name |
 
 All lookups resolve in the following order:
 
 1. Field-level CLI override (`#[field(cli = "...")]`)
 2. Field-level env override (`#[field(env = "...")]`)
-3. Sources registered on the loader (`with_config` or `add_source`)
+3. Sources registered on the loader via `add_source`
 
 #### Validators
 
@@ -141,15 +141,14 @@ Each helper returns a closure that you can combine or wrap to build higher-level
 
 The generated `<Struct>Loader` exposes:
 
-- `with_config()` – loads every `config(...)` entry from the attribute.
 - `add_source(source)` – supply any custom `ConfigSource` (including `CliArguments`).
-- `load()` – merges the queued sources and deserializes the struct.
+- `load()` – merges all sources (including any `config(...)` entries declared on the struct) and deserializes into the struct.
 
-You can construct sources manually using items re-exported from the crate:
+Config files declared with `#[forgeconf(config(path = "..."))]` are loaded automatically when you call `loader()` — no extra call needed. Use `add_source` to layer additional files or CLI arguments on top:
 
 ```rust
 let cfg = AppConfig::loader()
-    .add_source(forgeconf::ConfigFile::new("settings.toml"))
+    .add_source(forgeconf::ConfigFile::new("settings.override.toml"))
     .add_source(forgeconf::CliArguments::new().with_args(["--port=9090"]))
     .load()?;
 ```
