@@ -3,6 +3,45 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.5.0](https://github.com/chikof/forgeconf/compare/v0.4.1..v0.5.0) - 2026-04-21
+
+### Bug Fixes
+
+- **(ci)** allow unused_assignments cause of miette - ([f80a54e](https://github.com/chikof/forgeconf/commit/f80a54e807c88b5937f2c722a7489ef3c9c58df7)) - Chiko
+- **(node)** trim whitespace before scalar parsing - ([9e74380](https://github.com/chikof/forgeconf/commit/9e74380a40055f18ff134691608cf0870f53d545)) - Chiko
+- had to manually specify unsafe when setting a var with the change of rust edition 2024 - ([2cfb914](https://github.com/chikof/forgeconf/commit/2cfb91488e09945e99eba90c995d38ea043c80d5)) - Chiko
+- not nightly on nix i guess - ([d788e33](https://github.com/chikof/forgeconf/commit/d788e33d429f5d9d655a6aec613b45ae156a3171)) - Chiko
+
+### Features
+
+- **(loader)** [**breaking**] auto-load config files and require explicit nested - ([d961871](https://github.com/chikof/forgeconf/commit/d96187139a7afffce7ff5e66948cbf4a9860cef2)) - Chiko
+- allow dynamic path expressions - ([334157f](https://github.com/chikof/forgeconf/commit/334157fdbd41dec91f210c0ad829e7344533cbd1)) - Chiko
+
+### Miscellaneous Chores
+
+- **(cliff)** dont include release commit on releases - ([29ad583](https://github.com/chikof/forgeconf/commit/29ad583b458a550be8e276bbeef243487baf9299)) - Chiko
+- somehow the format got reverted? - ([1e19683](https://github.com/chikof/forgeconf/commit/1e19683e059e7bb908d0e6e014dfd5ef58e55a92)) - Chiko
+- formatting - ([420475c](https://github.com/chikof/forgeconf/commit/420475caca0ab470eec4846b5e59b30cc1cbb9e7)) - Chiko
+- update readme - ([a2d64ef](https://github.com/chikof/forgeconf/commit/a2d64ef55d747a702f0bbcf0fae8802267504fa1)) - Chiko
+- clean release script - ([a9509f6](https://github.com/chikof/forgeconf/commit/a9509f6d3b9087fd6560c8f7b535563d5e02b41f)) - Chiko
+
+### Style
+
+- run `cargo fmt` (my nvim config wont let me format) - ([a95e131](https://github.com/chikof/forgeconf/commit/a95e13166f878da1d44859e8a8786292281ccc58)) - Chiko
+
+### Build
+
+- **(deps)** bump regex from 1.12.2 to 1.12.3 ([#20](https://github.com/chikof/forgeconf/issues/20)) - ([296cabd](https://github.com/chikof/forgeconf/commit/296cabdb9ecad48c342d4e9bba6a9be0cc4f9f8b)) - dependabot[bot]
+- **(deps)** bump tempfile from 3.24.0 to 3.25.0 ([#22](https://github.com/chikof/forgeconf/issues/22)) - ([0c4fb7e](https://github.com/chikof/forgeconf/commit/0c4fb7ed47caa54daf865677405d6ba15f2947b1)) - dependabot[bot]
+- **(deps)** bump syn from 2.0.114 to 2.0.116 ([#23](https://github.com/chikof/forgeconf/issues/23)) - ([a5f2c91](https://github.com/chikof/forgeconf/commit/a5f2c912804eee94df0b712996c9e43df6d177c4)) - dependabot[bot]
+- **(deps)** bump criterion from 0.8.1 to 0.8.2 ([#21](https://github.com/chikof/forgeconf/issues/21)) - ([b4b2e01](https://github.com/chikof/forgeconf/commit/b4b2e01707834cea02c19978746256b3a06814e9)) - dependabot[bot]
+- **(deps)** bump syn from 2.0.116 to 2.0.117 ([#29](https://github.com/chikof/forgeconf/issues/29)) - ([2a68178](https://github.com/chikof/forgeconf/commit/2a68178af90e14780ad5c83858f61900d5e91240)) - dependabot[bot]
+- **(deps)** bump config from 0.15.19 to 0.15.21 ([#34](https://github.com/chikof/forgeconf/issues/34)) - ([e92ceb2](https://github.com/chikof/forgeconf/commit/e92ceb294d628eeaa65ec168ce2f63c74015b6a3)) - dependabot[bot]
+- **(deps)** bump tempfile from 3.25.0 to 3.27.0 ([#33](https://github.com/chikof/forgeconf/issues/33)) - ([d0e2895](https://github.com/chikof/forgeconf/commit/d0e2895c7afba4e5ce9707c4390d053a7b6bd070)) - dependabot[bot]
+- **(deps)** bump toml from 0.9.11+spec-1.1.0 to 1.0.6+spec-1.1.0 ([#32](https://github.com/chikof/forgeconf/issues/32)) - ([fd10176](https://github.com/chikof/forgeconf/commit/fd10176986c1cf768f15dfad67d43b7c4100c7dd)) - dependabot[bot]
+- **(deps)** bump quote from 1.0.44 to 1.0.45 ([#31](https://github.com/chikof/forgeconf/issues/31)) - ([e24ecec](https://github.com/chikof/forgeconf/commit/e24ecec138d86efcbc83f835925b7a99d921443b)) - dependabot[bot]
+
+---
 ## [0.4.1](https://github.com/chikof/forgeconf/compare/v0.4.0..v0.4.1) - 2026-02-08
 
 ### Bug Fixes
@@ -19,10 +58,6 @@ All notable changes to this project will be documented in this file. See [conven
 ### Bug Fixes
 
 -  [**breaking**]remove cfg attributes from macro to prevent check-cfg warnings - ([25df425](https://github.com/chikof/forgeconf/commit/25df425caaa1f15a7f6d85a4a5acbe8a88b38db5)) - Chiko
-
-### Miscellaneous Chores
-
-- **(release)** prepare v0.4.0 - ([74a190b](https://github.com/chikof/forgeconf/commit/74a190b388f99ba9b3b17d9e55e1aa39a61ed603)) - Chiko
 
 ### Ci
 
@@ -43,8 +78,6 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Miscellaneous Chores
 
-- **(release)** add automated script and docs - ([485d2a3](https://github.com/chikof/forgeconf/commit/485d2a31aaed1eb9b20cfed20099dea302bbe2f8)) - chikof
-- **(release)** prepare v0.3.0 - ([7df8b2d](https://github.com/chikof/forgeconf/commit/7df8b2d36bb4a658c1d6f54cd4ae177c94398723)) - Chiko
 - add benchmarks - ([ee93311](https://github.com/chikof/forgeconf/commit/ee9331124434e338f825165147b9e5ea06a7ba76)) - chikof
 - formatting - ([1e67c3a](https://github.com/chikof/forgeconf/commit/1e67c3a522ac7158874e44d5c023ef789dd29988)) - Chiko
 
@@ -76,7 +109,6 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Miscellaneous Chores
 
-- **(release)** bump versions to 0.2.0 - ([56b8f1e](https://github.com/chikof/forgeconf/commit/56b8f1e26c827a062bfbab8c4612734cdebc1410)) - chikof
 - forgot to run cargo fmt - ([be2337b](https://github.com/chikof/forgeconf/commit/be2337b1767c4be62f3bc556b955c77204f8094c)) - chikof
 
 ### Build
