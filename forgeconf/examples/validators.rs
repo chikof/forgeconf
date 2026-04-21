@@ -47,9 +47,7 @@ struct ServerConfig {
 fn main() {
     println!("=== Configuration Validation Example ===\n");
 
-    match ServerConfig::loader()
-        .load()
-    {
+    match ServerConfig::loader().load() {
         Ok(config) => {
             println!("✓ Configuration loaded and validated successfully!");
             println!("\nServer Configuration:");

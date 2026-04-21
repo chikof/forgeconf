@@ -8,9 +8,7 @@ struct BasicConfig {
 
 #[test]
 fn loads_configuration_file() -> Result<(), ConfigError> {
-    let cfg = BasicConfig::loader()
-
-        .load()?;
+    let cfg = BasicConfig::loader().load()?;
 
     assert_eq!(cfg.port, 3000);
     assert!(

@@ -35,9 +35,7 @@ struct AppConfig {
 fn main() {
     println!("=== Nested Configuration Example ===\n");
 
-    match AppConfig::loader()
-        .load()
-    {
+    match AppConfig::loader().load() {
         Ok(config) => {
             println!("✓ Configuration loaded successfully!");
             println!("\nApplication: {}", config.app_name);

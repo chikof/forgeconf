@@ -22,8 +22,7 @@ fn main() -> Result<(), forgeconf::ConfigError> {
     println!("=== Basic Configuration Loading Example ===\n");
 
     // Load the configuration
-    let config = AppConfig::loader()
-        .load()?;
+    let config = AppConfig::loader().load()?;
 
     println!("✓ Configuration loaded successfully!");
     println!("\nConfiguration values:");

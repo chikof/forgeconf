@@ -16,8 +16,7 @@ struct ClusterConfig {
 
 #[test]
 fn yaml_files_can_be_loaded() -> Result<(), ConfigError> {
-    let cfg = ClusterConfig::loader()
-        .load()?;
+    let cfg = ClusterConfig::loader().load()?;
 
     assert_eq!(
         cfg.service

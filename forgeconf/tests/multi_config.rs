@@ -11,8 +11,7 @@ struct LayeredConfig {
 
 #[test]
 fn explicit_format_and_priority_override() -> Result<(), ConfigError> {
-    let cfg = LayeredConfig::loader()
-        .load()?;
+    let cfg = LayeredConfig::loader().load()?;
 
     assert_eq!(cfg.port, 5555);
     assert_eq!(cfg.database_url, "postgres://override");

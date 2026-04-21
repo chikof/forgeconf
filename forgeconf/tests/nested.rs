@@ -22,8 +22,7 @@ struct ApplicationConfig {
 
 #[test]
 fn nested_structs_load_from_sections() -> Result<(), ConfigError> {
-    let cfg = ApplicationConfig::loader()
-        .load()?;
+    let cfg = ApplicationConfig::loader().load()?;
 
     assert_eq!(
         cfg.http
