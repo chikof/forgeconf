@@ -44,7 +44,7 @@ cargo set-version --workspace "${VERSION}"
 
 git cliff --config cliff.toml --tag "${TAG}" -o CHANGELOG.md
 
-cargo +nightly fmt --all
+cargo fmt --all
 cargo test --workspace --all-features
 
 git add CHANGELOG.md Cargo.lock
