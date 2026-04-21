@@ -12,7 +12,6 @@ struct LayeredConfig {
 #[test]
 fn explicit_format_and_priority_override() -> Result<(), ConfigError> {
     let cfg = LayeredConfig::loader()
-        .with_config()
         .load()?;
 
     assert_eq!(cfg.port, 5555);

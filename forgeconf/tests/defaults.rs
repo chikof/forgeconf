@@ -13,7 +13,6 @@ struct DefaultsConfig {
 #[test]
 fn defaults_and_optional_fields_work() -> Result<(), ConfigError> {
     let cfg = DefaultsConfig::loader()
-        .with_config()
         .load()?;
 
     assert_eq!(cfg.port, 8080);

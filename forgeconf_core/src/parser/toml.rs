@@ -39,87 +39,122 @@ fn convert(value: Value) -> ConfigNode {
 mod tests {
     use super::*;
 
-    #[test]
-    fn parses_basic_toml() {
-        let input = r#"
-            port = 8080
-            host = "localhost"
-        "#;
-        let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            table
-                .get("port")
-                .unwrap()
-                .to_string(),
-            "8080"
-        );
-        assert_eq!(
-            table
-                .get("host")
-                .unwrap()
-                .to_string(),
-            "localhost"
-        );
-    }
+    mod parse {
+        use super::*;
 
-    #[test]
-    fn parses_nested_tables() {
-        let input = r#"
-            [database]
-            host = "localhost"
-            port = 5432
-        "#;
-        let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        let db = table
-            .get("database")
-            .unwrap()
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            db.get("host")
-                .unwrap()
-                .to_string(),
-            "localhost"
-        );
-        assert_eq!(
-            db.get("port")
-                .unwrap()
-                .to_string(),
-            "5432"
-        );
-    }
-
-    #[test]
-    fn parses_arrays() {
-        let input = r#"
-            tags = ["api", "production", "v2"]
-        "#;
-        let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        match table
-            .get("tags")
-            .unwrap()
-        {
-            ConfigNode::Array(items) => {
-                assert_eq!(items.len(), 3);
-                assert_eq!(items[0].to_string(), "api");
-            },
-            _ => panic!("expected array"),
+        #[test]
+        fn should_return_integer_field_from_basic_toml() {
+            let input = r#"
+                port = 8080
+                host = "localhost"
+            "#;
+            let node = parse(input).unwrap();
+            let table = node
+                .as_table()
+                .unwrap();
+            assert_eq!(
+                table
+                    .get("port")
+                    .unwrap()
+                    .to_string(),
+                "8080"
+            );
         }
-    }
 
-    #[test]
-    fn returns_error_on_invalid_toml() {
-        let input = "invalid = [toml";
-        let err = parse(input).unwrap_err();
-        assert!(matches!(err, ConfigError::Toml { .. }));
+        #[test]
+        fn should_return_string_field_from_basic_toml() {
+            let input = r#"
+                port = 8080
+                host = "localhost"
+            "#;
+            let node = parse(input).unwrap();
+            let table = node
+                .as_table()
+                .unwrap();
+            assert_eq!(
+                table
+                    .get("host")
+                    .unwrap()
+                    .to_string(),
+                "localhost"
+            );
+        }
+
+        #[test]
+        fn should_return_nested_string_field() {
+            let input = r#"
+                [database]
+                host = "localhost"
+                port = 5432
+            "#;
+            let node = parse(input).unwrap();
+            let db = node
+                .as_table()
+                .unwrap()
+                .get("database")
+                .unwrap()
+                .as_table()
+                .unwrap();
+            assert_eq!(
+                db.get("host")
+                    .unwrap()
+                    .to_string(),
+                "localhost"
+            );
+        }
+
+        #[test]
+        fn should_return_nested_integer_field() {
+            let input = r#"
+                [database]
+                host = "localhost"
+                port = 5432
+            "#;
+            let node = parse(input).unwrap();
+            let db = node
+                .as_table()
+                .unwrap()
+                .get("database")
+                .unwrap()
+                .as_table()
+                .unwrap();
+            assert_eq!(
+                db.get("port")
+                    .unwrap()
+                    .to_string(),
+                "5432"
+            );
+        }
+
+        #[test]
+        fn should_return_array_with_correct_length() {
+            let input = r#"tags = ["api", "production", "v2"]"#;
+            let node = parse(input).unwrap();
+            let tags = node
+                .as_table()
+                .unwrap()
+                .get("tags")
+                .unwrap();
+            assert!(matches!(tags, ConfigNode::Array(items) if items.len() == 3));
+        }
+
+        #[test]
+        fn should_return_first_array_item() {
+            let input = r#"tags = ["api", "production", "v2"]"#;
+            let node = parse(input).unwrap();
+            let tags = node
+                .as_table()
+                .unwrap()
+                .get("tags")
+                .unwrap();
+            assert!(matches!(tags, ConfigNode::Array(items) if items[0].to_string() == "api"));
+        }
+
+        #[test]
+        fn should_return_error_on_invalid_toml() {
+            let input = "invalid = [toml";
+            let err = parse(input).unwrap_err();
+            assert!(matches!(err, ConfigError::Toml { .. }));
+        }
     }
 }

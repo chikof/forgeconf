@@ -1,5 +1,4 @@
 .ONESHELL:
-SHELL := /bin/bash
 
 .SILENT:
 

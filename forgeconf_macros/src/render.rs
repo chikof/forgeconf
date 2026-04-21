@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Expr, ItemStruct, LitStr, Result};
 
-use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr, is_scalar_type};
+use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr};
 
 pub fn render(
     item: &ItemStruct,
@@ -12,7 +12,7 @@ pub fn render(
     let ident = &item.ident;
     let loader_ident = format_ident!("{}Loader", ident);
 
-    let add_config = args
+    let add_config_stmts = args
         .files
         .iter()
         .map(render_config_addition);
@@ -33,9 +33,9 @@ pub fn render(
         #[allow(unexpected_cfgs)]
         impl #ident {
             pub fn loader() -> #loader_ident {
-                #loader_ident {
-                    builder: ::forgeconf::ConfigBuilder::new(),
-                }
+                let mut __builder = ::forgeconf::ConfigBuilder::new();
+                #(#add_config_stmts)*
+                #loader_ident { builder: __builder }
             }
 
             pub fn load_from(node: &::forgeconf::ConfigNode) -> Result<Self, ::forgeconf::ConfigError> {
@@ -53,11 +53,6 @@ pub fn render(
         }
 
         impl #loader_ident {
-            pub fn with_config(mut self) -> Self {
-                #(#add_config)*
-                self
-            }
-
             pub fn add_source<S>(mut self, source: S) -> Self
             where
                 S: ::forgeconf::ConfigSource + 'static,
@@ -174,8 +169,7 @@ fn render_config_addition(cfg: &ConfigFile) -> TokenStream {
         .unwrap_or_default();
 
     quote! {
-        self.builder = self.builder.add_source(
-            // Expect path to return a value that contains a string
+        __builder = __builder.add_source(
             ::forgeconf::ConfigFile::new(#path)
                 #format_chain
                 #priority_chain
@@ -335,10 +329,13 @@ fn field_kind(field: &FieldSpec) -> FieldKind<'_> {
         .as_ref()
     {
         FieldKind::Default(expr)
-    } else if is_scalar_type(&field.ty) {
-        FieldKind::Scalar
-    } else {
+    } else if field
+        .options
+        .nested
+    {
         FieldKind::Nested
+    } else {
+        FieldKind::Scalar
     }
 }
 

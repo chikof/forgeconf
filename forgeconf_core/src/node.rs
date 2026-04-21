@@ -8,9 +8,13 @@ use crate::ConfigError;
 /// Representation of a configuration tree.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConfigNode {
+    /// A map of named child nodes.
     Table(BTreeMap<String, ConfigNode>),
+    /// An ordered list of child nodes.
     Array(Vec<ConfigNode>),
+    /// A leaf value stored as a string.
     Scalar(String),
+    /// Absence of a value.
     Null,
 }
 
@@ -82,6 +86,8 @@ impl Display for ConfigNode {
 
 /// Trait implemented by types that can be created from a [`ConfigNode`].
 pub trait FromNode: Sized {
+    /// Convert `node` into `Self`, using `key` as the field name in error
+    /// messages.
     fn from_node(node: &ConfigNode, key: &str) -> Result<Self, ConfigError>;
 }
 
@@ -184,21 +190,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn vec_from_null_becomes_empty() {
+    fn vec_from_null_should_return_empty_vec() {
         let node = ConfigNode::Null;
         let parsed = Vec::<u8>::from_node(&node, "numbers").unwrap();
         assert!(parsed.is_empty());
     }
 
     #[test]
-    fn option_from_scalar_resolves() {
+    fn option_from_scalar_should_return_some_value() {
         let node = ConfigNode::Scalar("42".into());
         let parsed = Option::<u32>::from_node(&node, "answer").unwrap();
         assert_eq!(parsed, Some(42));
     }
 
     #[test]
-    fn string_from_null_is_missing() {
+    fn string_from_null_should_return_missing_error() {
         let node = ConfigNode::Null;
         let err = String::from_node(&node, "name").unwrap_err();
         assert!(matches!(
@@ -208,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn to_owned_table_rejects_non_table() {
+    fn to_owned_table_from_scalar_should_return_type_mismatch() {
         let node = ConfigNode::Scalar("value".into());
         let err = node
             .to_owned_table()
@@ -225,14 +231,14 @@ mod tests {
     }
 
     #[test]
-    fn bool_from_scalar_parses() {
+    fn bool_from_scalar_should_parse_true() {
         let node = ConfigNode::Scalar("true".into());
         let parsed = bool::from_node(&node, "flag").unwrap();
         assert!(parsed);
     }
 
     #[test]
-    fn numeric_parse_error_is_reported() {
+    fn numeric_from_invalid_scalar_should_return_type_mismatch() {
         let node = ConfigNode::Scalar("not-a-number".into());
         let err = u16::from_node(&node, "size").unwrap_err();
         assert!(matches!(
@@ -246,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn char_from_long_string_is_rejected() {
+    fn char_from_multi_char_string_should_return_type_mismatch() {
         let node = ConfigNode::Scalar("abc".into());
         let err = char::from_node(&node, "initial").unwrap_err();
         assert!(matches!(
@@ -257,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn vec_from_non_array_errors() {
+    fn vec_from_scalar_should_return_type_mismatch() {
         let node = ConfigNode::Scalar("nope".into());
         let err = Vec::<u8>::from_node(&node, "values").unwrap_err();
         assert!(matches!(

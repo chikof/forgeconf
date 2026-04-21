@@ -25,7 +25,6 @@ fn main() {
     // Load config with CLI overrides
     // CLI arguments have highest priority (255) by default
     match AppConfig::loader()
-        .with_config()
         .add_source(CliArguments::new().with_args(std::env::args().skip(1)))
         .load()
     {

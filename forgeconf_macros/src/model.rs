@@ -31,6 +31,7 @@ pub struct FieldOptions {
     pub cli: Option<String>,
     pub default: Option<Expr>,
     pub optional: bool,
+    pub nested: bool,
     pub validators: Vec<Expr>,
 }
 
@@ -168,6 +169,7 @@ impl FieldOptions {
                 MetaEntry::Cli(value) => options.cli = Some(value.value()),
                 MetaEntry::Optional(flag) => options.optional = flag.value(),
                 MetaEntry::Default(expr) => options.default = Some(expr),
+                MetaEntry::Nested => options.nested = true,
                 MetaEntry::Validator(expr) => options
                     .validators
                     .push(expr),
@@ -209,6 +211,9 @@ impl FieldOptions {
         if other.optional {
             self.optional = true;
         }
+        if other.nested {
+            self.nested = true;
+        }
         if !other
             .validators
             .is_empty()
@@ -241,12 +246,19 @@ enum MetaEntry {
     Cli(LitStr),
     Optional(LitBool),
     Default(Expr),
+    Nested,
     Validator(Expr),
 }
 
 impl Parse for MetaEntry {
     fn parse(input: ParseStream) -> Result<Self> {
         let ident: Ident = input.parse()?;
+
+        // `nested` is a bare flag — no `= value` allowed
+        if ident == "nested" {
+            return Ok(MetaEntry::Nested);
+        }
+
         input.parse::<Token![=]>()?;
 
         match ident
@@ -263,41 +275,6 @@ impl Parse for MetaEntry {
             other => Err(Error::new(ident.span(), format!("unknown field attribute `{other}`"))),
         }
     }
-}
-
-pub fn is_scalar_type(ty: &Type) -> bool {
-    if let Type::Path(path) = ty
-        && let Some(segment) = path
-            .path
-            .segments
-            .last()
-    {
-        let ident = segment
-            .ident
-            .to_string();
-        return matches!(
-            ident.as_str(),
-            "String"
-                | "bool"
-                | "u8"
-                | "u16"
-                | "u32"
-                | "u64"
-                | "u128"
-                | "i8"
-                | "i16"
-                | "i32"
-                | "i64"
-                | "i128"
-                | "isize"
-                | "usize"
-                | "f32"
-                | "f64"
-                | "char"
-        ) || ident == "Vec";
-    }
-
-    false
 }
 
 fn is_option_type(ty: &Type) -> bool {

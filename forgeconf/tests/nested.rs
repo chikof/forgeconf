@@ -14,16 +14,15 @@ struct DatabaseSettings {
 
 #[forgeconf(config(path = "tests/fixtures/nested.toml"))]
 struct ApplicationConfig {
-    #[field(name = "http")]
+    #[field(name = "http", nested)]
     http: HttpSettings,
-    #[field(name = "database")]
+    #[field(name = "database", nested)]
     database: DatabaseSettings,
 }
 
 #[test]
 fn nested_structs_load_from_sections() -> Result<(), ConfigError> {
     let cfg = ApplicationConfig::loader()
-        .with_config()
         .load()?;
 
     assert_eq!(

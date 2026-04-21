@@ -13,7 +13,6 @@ struct BasicConfig {
 #[test]
 fn dynamic_path_loading() -> Result<(), ConfigError> {
     let cfg = BasicConfig::loader()
-        .with_config()
         .load()?;
 
     assert_eq!(cfg.port, 3000);

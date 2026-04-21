@@ -19,7 +19,6 @@
 //! fn main() -> Result<(), ConfigError> {
 //!     unsafe { std::env::set_var("APP_DATABASE_URL", "postgres://override"); };
 //!     let cfg = AppConfig::loader()
-//!         .with_config() // load every `config(...)` entry
 //!         .load()?;
 //!     println!("listening on {}", cfg.port);
 //!     println!("db url: {}", cfg.database_url);

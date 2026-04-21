@@ -10,7 +10,6 @@ struct BrokenConfig {
 #[test]
 fn missing_fields_raise_useful_errors() {
     let err = BrokenConfig::loader()
-        .with_config()
         .load()
         .unwrap_err();
 

@@ -3,7 +3,10 @@
 //! These errors use `miette::Diagnostic` for beautiful error reporting with
 //! source code snippets.
 
-#![allow(unused_assignments)] // Suppress false positives from miette's Diagnostic derive macro
+#![expect(
+    unused_assignments,
+    reason = "miette Diagnostic derive macro triggers false positive unused_assignments warnings"
+)]
 
 use std::io;
 

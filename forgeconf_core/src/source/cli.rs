@@ -123,54 +123,63 @@ fn as_table(node: &mut ConfigNode) -> &mut BTreeMap<String, ConfigNode> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn insert_path_builds_nested_tables() {
-        let mut tree = BTreeMap::new();
-        insert_path(&mut tree, "db.host", "localhost");
-        insert_path(&mut tree, "db.port", "5432");
+    mod insert_path {
+        use super::*;
 
-        let db = tree
-            .get("db")
-            .unwrap();
-        let table = db
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            table
+        #[test]
+        fn should_insert_string_value_under_nested_key() {
+            let mut tree = BTreeMap::new();
+            insert_path(&mut tree, "db.host", "localhost");
+
+            let host = tree
+                .get("db")
+                .unwrap()
+                .as_table()
+                .unwrap()
                 .get("host")
                 .unwrap()
-                .to_string(),
-            "localhost"
-        );
-        assert_eq!(
-            table
+                .to_string();
+            assert_eq!(host, "localhost");
+        }
+
+        #[test]
+        fn should_insert_second_value_into_existing_nested_table() {
+            let mut tree = BTreeMap::new();
+            insert_path(&mut tree, "db.host", "localhost");
+            insert_path(&mut tree, "db.port", "5432");
+
+            let port = tree
+                .get("db")
+                .unwrap()
+                .as_table()
+                .unwrap()
                 .get("port")
                 .unwrap()
-                .to_string(),
-            "5432"
-        );
+                .to_string();
+            assert_eq!(port, "5432");
+        }
     }
 
-    #[test]
-    fn cli_arguments_can_override_values() {
-        let cli = CliArguments::new().with_args(["--server.port=9000"]);
-        let node = cli
-            .load()
-            .unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        let server = table
-            .get("server")
-            .unwrap()
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            server
+    mod cli_arguments {
+        use super::*;
+
+        #[test]
+        fn load_should_return_nested_value_from_dotted_flag() {
+            let cli = CliArguments::new().with_args(["--server.port=9000"]);
+            let node = cli
+                .load()
+                .unwrap();
+            let port = node
+                .as_table()
+                .unwrap()
+                .get("server")
+                .unwrap()
+                .as_table()
+                .unwrap()
                 .get("port")
                 .unwrap()
-                .to_string(),
-            "9000"
-        );
+                .to_string();
+            assert_eq!(port, "9000");
+        }
     }
 }

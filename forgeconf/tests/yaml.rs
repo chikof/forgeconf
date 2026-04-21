@@ -8,6 +8,7 @@ struct ServiceConfig {
 
 #[forgeconf(config(path = "tests/fixtures/yaml-config.yaml"))]
 struct ClusterConfig {
+    #[field(nested)]
     service: ServiceConfig,
     replicas: Vec<String>,
     port: u16,
@@ -16,7 +17,6 @@ struct ClusterConfig {
 #[test]
 fn yaml_files_can_be_loaded() -> Result<(), ConfigError> {
     let cfg = ClusterConfig::loader()
-        .with_config()
         .load()?;
 
     assert_eq!(

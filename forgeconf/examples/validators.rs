@@ -48,7 +48,6 @@ fn main() {
     println!("=== Configuration Validation Example ===\n");
 
     match ServerConfig::loader()
-        .with_config()
         .load()
     {
         Ok(config) => {

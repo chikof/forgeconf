@@ -23,7 +23,6 @@ fn main() -> Result<(), forgeconf::ConfigError> {
 
     // Load the configuration
     let config = AppConfig::loader()
-        .with_config()
         .load()?;
 
     println!("✓ Configuration loaded successfully!");

@@ -16,7 +16,6 @@ fn cli_and_env_sources_override_files() -> Result<(), ConfigError> {
     };
 
     let cfg = OverrideConfig::loader()
-        .with_config()
         .add_source(
             CliArguments::new()
                 .with_priority(255)

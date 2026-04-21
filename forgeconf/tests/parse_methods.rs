@@ -110,6 +110,7 @@ fn parse_json_with_defaults() -> Result<(), ConfigError> {
 #[forgeconf]
 struct NestedParseConfig {
     port: u16,
+    #[field(nested)]
     database: DatabaseConfig,
 }
 

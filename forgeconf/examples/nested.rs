@@ -26,9 +26,9 @@ struct LoggingConfig {
 #[forgeconf(config(path = "examples/fixtures/nested.toml"))]
 struct AppConfig {
     app_name: String,
-    #[field(name = "database")]
+    #[field(name = "database", nested)]
     database: DatabaseConfig,
-    #[field(name = "logging")]
+    #[field(name = "logging", nested)]
     logging: LoggingConfig,
 }
 
@@ -36,7 +36,6 @@ fn main() {
     println!("=== Nested Configuration Example ===\n");
 
     match AppConfig::loader()
-        .with_config()
         .load()
     {
         Ok(config) => {
