@@ -1,3 +1,4 @@
+use std::any::type_name;
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
@@ -170,10 +171,11 @@ where
 {
     match node {
         ConfigNode::Scalar(value) => value
+            .trim()
             .parse::<T>()
-            .map_err(|_| ConfigError::mismatch(key, std::any::type_name::<T>(), value.clone())),
+            .map_err(|_| ConfigError::mismatch(key, type_name::<T>(), value.clone())),
         ConfigNode::Null => Err(ConfigError::missing(key)),
-        other => Err(ConfigError::mismatch(key, std::any::type_name::<T>(), other.kind())),
+        other => Err(ConfigError::mismatch(key, type_name::<T>(), other.kind())),
     }
 }
 
