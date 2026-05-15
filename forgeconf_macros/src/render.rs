@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{ItemStruct, LitStr, Result};
+use syn::{ItemStruct, Result};
 
 use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr};
 
