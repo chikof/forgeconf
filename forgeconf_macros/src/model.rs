@@ -3,7 +3,20 @@ use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{Error, Expr, Field, Ident, ItemStruct, LitBool, LitInt, LitStr, Result, Token, Type};
+use syn::{
+    Error,
+    Expr,
+    Field,
+    Ident,
+    ItemStruct,
+    LitBool,
+    LitChar,
+    LitInt,
+    LitStr,
+    Result,
+    Token,
+    Type,
+};
 
 #[derive(Default)]
 pub struct ForgeconfAttr {
@@ -33,6 +46,9 @@ pub struct FieldOptions {
     pub optional: bool,
     pub nested: bool,
     pub validators: Vec<Expr>,
+    pub short: Option<char>,
+    pub help: Option<String>,
+    pub no_cli: bool,
 }
 
 impl Parse for ForgeconfAttr {
@@ -173,6 +189,9 @@ impl FieldOptions {
                 MetaEntry::Validator(expr) => options
                     .validators
                     .push(expr),
+                MetaEntry::Short(lit) => options.short = Some(lit.value()),
+                MetaEntry::Help(value) => options.help = Some(value.value()),
+                MetaEntry::NoCli => options.no_cli = true,
             }
         }
 
@@ -221,6 +240,21 @@ impl FieldOptions {
             self.validators
                 .extend(other.validators);
         }
+        if other
+            .short
+            .is_some()
+        {
+            self.short = other.short;
+        }
+        if other
+            .help
+            .is_some()
+        {
+            self.help = other.help;
+        }
+        if other.no_cli {
+            self.no_cli = true;
+        }
         Ok(())
     }
 
@@ -248,15 +282,21 @@ enum MetaEntry {
     Default(Expr),
     Nested,
     Validator(Expr),
+    Short(LitChar),
+    Help(LitStr),
+    NoCli,
 }
 
 impl Parse for MetaEntry {
     fn parse(input: ParseStream) -> Result<Self> {
         let ident: Ident = input.parse()?;
 
-        // `nested` is a bare flag — no `= value` allowed
+        // bare flags — no `= value` allowed
         if ident == "nested" {
             return Ok(MetaEntry::Nested);
+        }
+        if ident == "no_cli" {
+            return Ok(MetaEntry::NoCli);
         }
 
         input.parse::<Token![=]>()?;
@@ -272,6 +312,8 @@ impl Parse for MetaEntry {
             "optional" => Ok(MetaEntry::Optional(input.parse()?)),
             "default" => Ok(MetaEntry::Default(input.parse()?)),
             "validate" => Ok(MetaEntry::Validator(input.parse()?)),
+            "short" => Ok(MetaEntry::Short(input.parse()?)),
+            "help" => Ok(MetaEntry::Help(input.parse()?)),
             other => Err(Error::new(ident.span(), format!("unknown field attribute `{other}`"))),
         }
     }

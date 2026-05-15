@@ -5,7 +5,7 @@ mod cli;
 mod file;
 
 #[cfg(feature = "cli")]
-pub use cli::CliArguments;
+pub use cli::{CliArgsSource, CliArguments};
 pub use file::ConfigFile;
 
 /// Trait implemented by configuration sources (files, CLI, etc).

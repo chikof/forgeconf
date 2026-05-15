@@ -4,6 +4,48 @@ use std::env;
 use super::ConfigSource;
 use crate::{ConfigError, ConfigNode};
 
+/// A `ConfigSource` backed by a pre-parsed flat map of ke -> value strings.
+///
+/// Useful for bridging third-party CLI parsers (e.g. clap) into the forgeconf
+/// source pipeline. Keys must match the config field names (or their `rename`
+/// values); values are strings that forgeconf will coerce via `FromNode`.
+pub struct CliArgsSource {
+    args: BTreeMap<String, String>,
+    priority: u8,
+}
+
+impl CliArgsSource {
+    pub fn new(args: BTreeMap<String, String>) -> Self {
+        Self { args, priority: u8::MAX }
+    }
+
+    pub fn with_priority(mut self, priority: u8) -> Self {
+        self.priority = priority;
+        self
+    }
+}
+
+impl Default for CliArgsSource {
+    fn default() -> Self {
+        Self::new(BTreeMap::new())
+    }
+}
+
+impl ConfigSource for CliArgsSource {
+    fn priority(&self) -> u8 {
+        self.priority
+    }
+
+    fn load(&self) -> Result<ConfigNode, ConfigError> {
+        let map = self
+            .args
+            .iter()
+            .map(|(k, v)| (k.clone(), ConfigNode::Scalar(v.clone())))
+            .collect();
+        Ok(ConfigNode::Table(map))
+    }
+}
+
 /// Pulls overrides from `std::env::args`.
 pub struct CliArguments {
     priority: u8,

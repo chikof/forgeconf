@@ -26,8 +26,8 @@
 //! }
 //! ```
 
-#[cfg(feature = "cli")]
-pub use forgeconf_core::CliArguments;
+#[cfg(feature = "clap")]
+pub use clap;
 #[cfg(all(feature = "parse", feature = "json"))]
 pub use forgeconf_core::parse_json;
 #[cfg(feature = "parse")]
@@ -38,6 +38,8 @@ pub use forgeconf_core::parse_toml;
 pub use forgeconf_core::parse_yaml;
 #[cfg(feature = "validators")]
 pub use forgeconf_core::validators;
+#[cfg(feature = "cli")]
+pub use forgeconf_core::{CliArgsSource, CliArguments};
 pub use forgeconf_core::{
     ConfigBuilder,
     ConfigError,

@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Expr, ItemStruct, LitStr, Result};
+use syn::{Expr, ItemStruct, LitChar, LitStr, Result};
 
 use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr};
 
@@ -21,8 +21,8 @@ pub fn render(
         .iter()
         .map(render_field_init);
 
-    // Generate parse methods for each enabled format
     let parse_methods = generate_parse_methods(ident);
+    let clap_methods = generate_clap_methods(ident, fields);
 
     let result = quote! {
         // Allow unexpected_cfgs to prevent warnings about parse/toml/yaml/json features
@@ -46,6 +46,7 @@ pub fn render(
             }
 
             #parse_methods
+            #clap_methods
         }
 
         pub struct #loader_ident {
@@ -184,7 +185,7 @@ fn render_field_init(field: &FieldSpec) -> TokenStream {
         .options
         .rename
         .clone()
-        .unwrap_or_else(|| ident.to_string());
+        .unwrap_or(ident.to_string());
     let key_lit = LitStr::new(&key, ident.span());
     let value_ident = format_ident!("__forgeconf_value");
 
@@ -344,6 +345,147 @@ enum FieldKind<'a> {
     Default(&'a Expr),
     Scalar,
     Nested,
+}
+
+fn generate_clap_methods(_ident: &syn::Ident, fields: &[FieldSpec]) -> TokenStream {
+    if !cfg!(feature = "clap") {
+        return TokenStream::new();
+    }
+
+    let augment_args: Vec<TokenStream> = fields
+        .iter()
+        .filter(|f| {
+            !f.options
+                .no_cli
+                && !f
+                    .options
+                    .nested
+        })
+        .map(render_clap_arg)
+        .collect();
+
+    let extract_args: Vec<TokenStream> = fields
+        .iter()
+        .filter(|f| {
+            !f.options
+                .no_cli
+                && !f
+                    .options
+                    .nested
+        })
+        .map(render_clap_extract)
+        .collect();
+
+    quote! {
+        /// Build a [`clap::Command`] augmented with an argument for every config field.
+        ///
+        /// Use [`Self::from_clap`] to convert the resulting [`clap::ArgMatches`] into
+        /// a [`forgeconf::CliArgsSource`] that can be passed to the loader.
+        pub fn augment_clap(cmd: ::forgeconf::clap::Command) -> ::forgeconf::clap::Command {
+            cmd #(#augment_args)*
+        }
+
+        /// Extract config values from clap [`ArgMatches`](forgeconf::clap::ArgMatches)
+        /// and return them as a [`CliArgsSource`](forgeconf::CliArgsSource).
+        ///
+        /// Only fields that were actually provided on the command line are inserted;
+        /// the rest continue to be resolved from other sources (files, env, defaults).
+        pub fn from_clap(matches: &::forgeconf::clap::ArgMatches) -> ::forgeconf::CliArgsSource {
+            let mut __map = ::std::collections::BTreeMap::new();
+            #(#extract_args)*
+            ::forgeconf::CliArgsSource::new(__map)
+        }
+    }
+}
+
+fn render_clap_arg(field: &FieldSpec) -> TokenStream {
+    let ident_str = field
+        .ident
+        .to_string();
+    let long = field
+        .options
+        .cli
+        .clone()
+        .unwrap_or(ident_str.replace('_', "-"));
+    let long_lit = LitStr::new(
+        &long,
+        field
+            .ident
+            .span(),
+    );
+    let id_lit = LitStr::new(
+        &ident_str,
+        field
+            .ident
+            .span(),
+    );
+
+    let short_chain = field
+        .options
+        .short
+        .map(|c| {
+            let lit = LitChar::new(
+                c,
+                field
+                    .ident
+                    .span(),
+            );
+            quote! { .short(#lit) }
+        })
+        .unwrap_or_default();
+
+    let help_chain = field
+        .options
+        .help
+        .as_ref()
+        .map(|h| {
+            let h_lit = LitStr::new(
+                h,
+                field
+                    .ident
+                    .span(),
+            );
+            quote! { .help(#h_lit) }
+        })
+        .unwrap_or_default();
+
+    quote! {
+        .arg(
+            ::forgeconf::clap::Arg::new(#id_lit)
+                .long(#long_lit)
+                #short_chain
+                #help_chain
+        )
+    }
+}
+
+fn render_clap_extract(field: &FieldSpec) -> TokenStream {
+    let ident_str = field
+        .ident
+        .to_string();
+    let id_lit = LitStr::new(
+        &ident_str,
+        field
+            .ident
+            .span(),
+    );
+    let config_key = field
+        .options
+        .rename
+        .clone()
+        .unwrap_or(ident_str.clone());
+    let config_key_lit = LitStr::new(
+        &config_key,
+        field
+            .ident
+            .span(),
+    );
+
+    quote! {
+        if let Some(__v) = matches.get_one::<String>(#id_lit) {
+            __map.insert(#config_key_lit.to_string(), __v.clone());
+        }
+    }
 }
 
 fn render_validator_calls(

@@ -16,6 +16,7 @@ yaml = ["forgeconf_macros/yaml", "forgeconf_core/yaml"]
 json = ["forgeconf_macros/json", "forgeconf_core/json"]
 regex = ["forgeconf_core/regex"]
 cli = ["forgeconf_core/cli"]
+clap = ["forgeconf_macros/clap", "forgeconf_core/cli", "dep:clap"]
 validators = ["forgeconf_core/validators"]
 parse = ["forgeconf_core/parse"]
 miette = ["forgeconf_core/miette"]
@@ -23,6 +24,7 @@ miette = ["forgeconf_core/miette"]
 [dependencies]
 forgeconf_macros = { version = "=0.5.0", path = "../forgeconf_macros" }
 forgeconf_core = { version = "=0.5.0", path = "../forgeconf_core" }
+clap = { version = "4", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 regex = "1.12.3"

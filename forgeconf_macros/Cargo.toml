@@ -13,6 +13,7 @@ default = ["toml"]
 toml = ["forgeconf_core/toml"]
 yaml = ["forgeconf_core/yaml"]
 json = ["forgeconf_core/json"]
+clap = []
 
 [lib]
 proc-macro = true

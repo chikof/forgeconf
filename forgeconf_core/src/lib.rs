@@ -19,5 +19,5 @@ pub use parser::parse_toml;
 pub use parser::parse_yaml;
 pub use parser::{FileFormat, load_from_path};
 #[cfg(feature = "cli")]
-pub use source::CliArguments;
+pub use source::{CliArgsSource, CliArguments};
 pub use source::{ConfigBuilder, ConfigFile, ConfigSource, merge_nodes};
