@@ -19,12 +19,7 @@ fn convert(value: Value) -> ConfigNode {
         Value::Float(num) => ConfigNode::Scalar(num.to_string()),
         Value::String(text) => ConfigNode::Scalar(text),
         Value::Datetime(dt) => ConfigNode::Scalar(dt.to_string()),
-        Value::Array(values) => ConfigNode::Array(
-            values
-                .into_iter()
-                .map(convert)
-                .collect(),
-        ),
+        Value::Array(values) => ConfigNode::Array(values.into_iter().map(convert).collect()),
         Value::Table(values) => {
             let entries = values
                 .into_iter()
@@ -49,16 +44,8 @@ mod tests {
                 host = "localhost"
             "#;
             let node = parse(input).unwrap();
-            let table = node
-                .as_table()
-                .unwrap();
-            assert_eq!(
-                table
-                    .get("port")
-                    .unwrap()
-                    .to_string(),
-                "8080"
-            );
+            let table = node.as_table().unwrap();
+            assert_eq!(table.get("port").unwrap().to_string(), "8080");
         }
 
         #[test]
@@ -68,16 +55,8 @@ mod tests {
                 host = "localhost"
             "#;
             let node = parse(input).unwrap();
-            let table = node
-                .as_table()
-                .unwrap();
-            assert_eq!(
-                table
-                    .get("host")
-                    .unwrap()
-                    .to_string(),
-                "localhost"
-            );
+            let table = node.as_table().unwrap();
+            assert_eq!(table.get("host").unwrap().to_string(), "localhost");
         }
 
         #[test]
@@ -95,12 +74,7 @@ mod tests {
                 .unwrap()
                 .as_table()
                 .unwrap();
-            assert_eq!(
-                db.get("host")
-                    .unwrap()
-                    .to_string(),
-                "localhost"
-            );
+            assert_eq!(db.get("host").unwrap().to_string(), "localhost");
         }
 
         #[test]
@@ -118,23 +92,14 @@ mod tests {
                 .unwrap()
                 .as_table()
                 .unwrap();
-            assert_eq!(
-                db.get("port")
-                    .unwrap()
-                    .to_string(),
-                "5432"
-            );
+            assert_eq!(db.get("port").unwrap().to_string(), "5432");
         }
 
         #[test]
         fn should_return_array_with_correct_length() {
             let input = r#"tags = ["api", "production", "v2"]"#;
             let node = parse(input).unwrap();
-            let tags = node
-                .as_table()
-                .unwrap()
-                .get("tags")
-                .unwrap();
+            let tags = node.as_table().unwrap().get("tags").unwrap();
             assert!(matches!(tags, ConfigNode::Array(items) if items.len() == 3));
         }
 
@@ -142,11 +107,7 @@ mod tests {
         fn should_return_first_array_item() {
             let input = r#"tags = ["api", "production", "v2"]"#;
             let node = parse(input).unwrap();
-            let tags = node
-                .as_table()
-                .unwrap()
-                .get("tags")
-                .unwrap();
+            let tags = node.as_table().unwrap().get("tags").unwrap();
             assert!(matches!(tags, ConfigNode::Array(items) if items[0].to_string() == "api"));
         }
 

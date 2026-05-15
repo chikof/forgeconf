@@ -14,9 +14,7 @@ pub struct ConfigFile {
 impl ConfigFile {
     pub fn new(path: impl AsRef<Path>) -> Self {
         Self {
-            path: path
-                .as_ref()
-                .to_path_buf(),
+            path: path.as_ref().to_path_buf(),
             format: None,
             priority: 10,
         }

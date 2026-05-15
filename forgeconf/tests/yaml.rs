@@ -18,15 +18,8 @@ struct ClusterConfig {
 fn yaml_files_can_be_loaded() -> Result<(), ConfigError> {
     let cfg = ClusterConfig::loader().load()?;
 
-    assert_eq!(
-        cfg.service
-            .name,
-        "forgeconf"
-    );
-    assert!(
-        cfg.service
-            .enabled
-    );
+    assert_eq!(cfg.service.name, "forgeconf");
+    assert!(cfg.service.enabled);
     assert_eq!(cfg.replicas, vec!["db-a", "db-b"]);
     assert_eq!(cfg.port, 8123);
 

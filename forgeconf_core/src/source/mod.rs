@@ -56,14 +56,12 @@ impl ConfigBuilder {
     where
         S: ConfigSource + 'static,
     {
-        self.sources
-            .push(Box::new(source));
+        self.sources.push(Box::new(source));
         self
     }
 
     pub fn load(mut self) -> Result<ConfigNode, ConfigError> {
-        self.sources
-            .sort_by_key(|source| source.priority());
+        self.sources.sort_by_key(|source| source.priority());
 
         let mut merged = ConfigNode::empty_table();
         for source in self.sources {
@@ -101,9 +99,7 @@ mod tests {
         }
 
         fn load(&self) -> Result<ConfigNode, ConfigError> {
-            Ok(self
-                .node
-                .clone())
+            Ok(self.node.clone())
         }
     }
 
@@ -117,16 +113,8 @@ mod tests {
         right.insert("host".into(), ConfigNode::Scalar("0.0.0.0".into()));
 
         let merged = merge_nodes(ConfigNode::Table(left), ConfigNode::Table(right));
-        let table = merged
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            table
-                .get("port")
-                .unwrap()
-                .to_string(),
-            "9090"
-        );
+        let table = merged.as_table().unwrap();
+        assert_eq!(table.get("port").unwrap().to_string(), "9090");
         assert!(table.contains_key("host"));
     }
 
@@ -145,15 +133,7 @@ mod tests {
             .load()
             .unwrap();
 
-        let table = node
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            table
-                .get("service")
-                .unwrap()
-                .to_string(),
-            "override"
-        );
+        let table = node.as_table().unwrap();
+        assert_eq!(table.get("service").unwrap().to_string(), "override");
     }
 }

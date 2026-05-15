@@ -11,9 +11,7 @@ use model::{ForgeconfAttr, collect_fields};
 pub fn forgeconf(attr: TokenStream, item: TokenStream) -> TokenStream {
     match expand(attr, item) {
         Ok(ts) => ts,
-        Err(err) => err
-            .to_compile_error()
-            .into(),
+        Err(err) => err.to_compile_error().into(),
     }
 }
 

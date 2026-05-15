@@ -15,10 +15,7 @@ fn defaults_and_optional_fields_work() -> Result<(), ConfigError> {
     let cfg = DefaultsConfig::loader().load()?;
 
     assert_eq!(cfg.port, 8080);
-    assert!(
-        cfg.notes
-            .is_none()
-    );
+    assert!(cfg.notes.is_none());
     assert_eq!(cfg.service_name, "example");
     Ok(())
 }

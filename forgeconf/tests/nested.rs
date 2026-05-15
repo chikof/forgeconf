@@ -24,25 +24,9 @@ struct ApplicationConfig {
 fn nested_structs_load_from_sections() -> Result<(), ConfigError> {
     let cfg = ApplicationConfig::loader().load()?;
 
-    assert_eq!(
-        cfg.http
-            .host,
-        "127.0.0.1"
-    );
-    assert_eq!(
-        cfg.http
-            .port,
-        8080
-    );
-    assert_eq!(
-        cfg.database
-            .url,
-        "postgres://service"
-    );
-    assert_eq!(
-        cfg.database
-            .pool,
-        16
-    );
+    assert_eq!(cfg.http.host, "127.0.0.1");
+    assert_eq!(cfg.http.port, 8080);
+    assert_eq!(cfg.database.url, "postgres://service");
+    assert_eq!(cfg.database.pool, 16);
     Ok(())
 }

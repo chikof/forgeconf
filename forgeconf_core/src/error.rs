@@ -163,10 +163,7 @@ impl std::fmt::Debug for ConfigError {
 
             let mut output = String::new();
             let handler = GraphicalReportHandler::new();
-            if handler
-                .render_report(&mut output, self)
-                .is_ok()
-            {
+            if handler.render_report(&mut output, self).is_ok() {
                 write!(f, "{}", output)
             } else {
                 // If fancy rendering fails, fall back to Display

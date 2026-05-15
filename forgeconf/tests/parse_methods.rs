@@ -133,18 +133,8 @@ fn parse_toml_nested() -> Result<(), ConfigError> {
 
     let config = NestedParseConfig::parse_toml(input)?;
     assert_eq!(config.port, 8080);
-    assert_eq!(
-        config
-            .database
-            .host,
-        "db.example.com"
-    );
-    assert_eq!(
-        config
-            .database
-            .port,
-        5432
-    );
+    assert_eq!(config.database.host, "db.example.com");
+    assert_eq!(config.database.port, 5432);
     Ok(())
 }
 
@@ -160,18 +150,8 @@ fn parse_yaml_nested() -> Result<(), ConfigError> {
 
     let config = NestedParseConfig::parse_yaml(input)?;
     assert_eq!(config.port, 8080);
-    assert_eq!(
-        config
-            .database
-            .host,
-        "db.yaml.com"
-    );
-    assert_eq!(
-        config
-            .database
-            .port,
-        5432
-    );
+    assert_eq!(config.database.host, "db.yaml.com");
+    assert_eq!(config.database.port, 5432);
     Ok(())
 }
 
@@ -190,18 +170,8 @@ fn parse_json_nested() -> Result<(), ConfigError> {
 
     let config = NestedParseConfig::parse_json(input)?;
     assert_eq!(config.port, 8080);
-    assert_eq!(
-        config
-            .database
-            .host,
-        "db.json.com"
-    );
-    assert_eq!(
-        config
-            .database
-            .port,
-        5432
-    );
+    assert_eq!(config.database.host, "db.json.com");
+    assert_eq!(config.database.port, 5432);
     Ok(())
 }
 

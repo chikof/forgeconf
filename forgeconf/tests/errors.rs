@@ -9,9 +9,7 @@ struct BrokenConfig {
 
 #[test]
 fn missing_fields_raise_useful_errors() {
-    let err = BrokenConfig::loader()
-        .load()
-        .unwrap_err();
+    let err = BrokenConfig::loader().load().unwrap_err();
 
     match err {
         ConfigError::MissingValue { field, .. } => assert_eq!(field, "missing"),

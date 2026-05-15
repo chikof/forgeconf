@@ -216,9 +216,7 @@ mod tests {
     #[test]
     fn to_owned_table_from_scalar_should_return_type_mismatch() {
         let node = ConfigNode::Scalar("value".into());
-        let err = node
-            .to_owned_table()
-            .unwrap_err();
+        let err = node.to_owned_table().unwrap_err();
         assert!(matches!(
             err,
             ConfigError::TypeMismatch {

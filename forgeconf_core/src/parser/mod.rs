@@ -64,11 +64,7 @@ pub fn load_from_path(
     };
 
     if !format_supported(format) {
-        return Err(ConfigError::UnsupportedFormat(
-            format
-                .label()
-                .into(),
-        ));
+        return Err(ConfigError::UnsupportedFormat(format.label().into()));
     }
 
     let contents = std::fs::read_to_string(path)?;
@@ -161,9 +157,7 @@ mod tests {
     #[test]
     fn load_from_path_requires_extension() {
         let dir = tempdir().unwrap();
-        let path = dir
-            .path()
-            .join("config");
+        let path = dir.path().join("config");
         fs::write(&path, "port = 7000").unwrap();
 
         let err = load_from_path(&path, None).unwrap_err();
@@ -173,21 +167,11 @@ mod tests {
     #[test]
     fn load_from_path_uses_explicit_format() {
         let dir = tempdir().unwrap();
-        let path = dir
-            .path()
-            .join("override.cfg");
+        let path = dir.path().join("override.cfg");
         fs::write(&path, "port = 6100").unwrap();
 
         let node = load_from_path(&path, Some(FileFormat::Toml)).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            table
-                .get("port")
-                .unwrap()
-                .to_string(),
-            "6100"
-        );
+        let table = node.as_table().unwrap();
+        assert_eq!(table.get("port").unwrap().to_string(), "6100");
     }
 }

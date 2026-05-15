@@ -37,12 +37,11 @@ impl ConfigSource for CliArgsSource {
     }
 
     fn load(&self) -> Result<ConfigNode, ConfigError> {
-        let map = self
-            .args
-            .iter()
-            .map(|(k, v)| (k.clone(), ConfigNode::Scalar(v.clone())))
-            .collect();
-        Ok(ConfigNode::Table(map))
+        let mut tree = BTreeMap::new();
+        for (key, value) in &self.args {
+            insert_path(&mut tree, key, value);
+        }
+        Ok(ConfigNode::Table(tree))
     }
 }
 
@@ -68,22 +67,12 @@ impl CliArguments {
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        self.args = Some(
-            args.into_iter()
-                .map(Into::into)
-                .collect(),
-        );
+        self.args = Some(args.into_iter().map(Into::into).collect());
         self
     }
 
     fn args(&self) -> Vec<String> {
-        if let Some(custom) = &self.args {
-            custom.clone()
-        } else {
-            env::args()
-                .skip(1)
-                .collect()
-        }
+        if let Some(custom) = &self.args { custom.clone() } else { env::args().skip(1).collect() }
     }
 }
 
@@ -113,12 +102,8 @@ impl ConfigSource for CliArguments {
 fn parse_flag(arg: &str) -> Option<(&str, &str)> {
     let stripped = arg.strip_prefix("--")?;
     let mut split = stripped.splitn(2, '=');
-    let key = split
-        .next()?
-        .trim();
-    let value = split
-        .next()?
-        .trim();
+    let key = split.next()?.trim();
+    let value = split.next()?.trim();
 
     if key.is_empty() { None } else { Some((key, value)) }
 }
@@ -208,9 +193,7 @@ mod tests {
         #[test]
         fn load_should_return_nested_value_from_dotted_flag() {
             let cli = CliArguments::new().with_args(["--server.port=9000"]);
-            let node = cli
-                .load()
-                .unwrap();
+            let node = cli.load().unwrap();
             let port = node
                 .as_table()
                 .unwrap()

@@ -145,9 +145,7 @@ where
     T: PartialEq + Display + Clone + 'static,
     I: IntoIterator<Item = T>,
 {
-    let allowed: Vec<T> = allowed
-        .into_iter()
-        .collect();
+    let allowed: Vec<T> = allowed.into_iter().collect();
     assert!(!allowed.is_empty(), "one_of requires at least one candidate value");
     let expected = format!(
         "one of [{}]",
@@ -159,10 +157,7 @@ where
     );
 
     move |value, key| {
-        if allowed
-            .iter()
-            .any(|candidate| candidate == value)
-        {
+        if allowed.iter().any(|candidate| candidate == value) {
             Ok(())
         } else {
             Err(ConfigError::mismatch(key, expected.clone(), value.to_string()))

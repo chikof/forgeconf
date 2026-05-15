@@ -11,9 +11,6 @@ fn loads_configuration_file() -> Result<(), ConfigError> {
     let cfg = BasicConfig::loader().load()?;
 
     assert_eq!(cfg.port, 3000);
-    assert!(
-        cfg.database_url
-            .contains("postgres://")
-    );
+    assert!(cfg.database_url.contains("postgres://"));
     Ok(())
 }

@@ -84,23 +84,17 @@ impl ConfigFile {
             let ident: Ident = input.parse()?;
             input.parse::<Token![=]>()?;
 
-            match ident
-                .to_string()
-                .as_str()
-            {
+            match ident.to_string().as_str() {
                 "path" => {
                     let expr: Expr = input.parse()?;
                     path = Some(expr);
                 },
                 "format" => {
                     let lit: LitStr = input.parse()?;
-                    format = Some(
-                        lit.value()
-                            .parse::<FileFormat>()
-                            .map_err(|err| {
-                                Error::new(lit.span(), format!("invalid format: {err}"))
-                            })?,
-                    );
+                    format =
+                        Some(lit.value().parse::<FileFormat>().map_err(|err| {
+                            Error::new(lit.span(), format!("invalid format: {err}"))
+                        })?);
                 },
                 "priority" => {
                     let lit: LitInt = input.parse()?;
@@ -116,7 +110,7 @@ impl ConfigFile {
             }
         }
 
-        let path = path.ok_or_else(|| Error::new(Span::call_site(), "missing `path`"))?;
+        let path = path.ok_or(Error::new(Span::call_site(), "missing `path`"))?;
         Ok(Self { path, format, priority })
     }
 }
@@ -124,10 +118,7 @@ impl ConfigFile {
 pub fn collect_fields(item: &mut ItemStruct) -> Result<Vec<FieldSpec>> {
     let mut specs = Vec::new();
 
-    for field in item
-        .fields
-        .iter_mut()
-    {
+    for field in item.fields.iter_mut() {
         specs.push(parse_field(field)?);
     }
 
@@ -138,19 +129,13 @@ fn parse_field(field: &mut Field) -> Result<FieldSpec> {
     let ident = field
         .ident
         .clone()
-        .ok_or_else(|| Error::new(field.span(), "tuple structs are not supported"))?;
+        .ok_or(Error::new(field.span(), "tuple structs are not supported"))?;
 
     let mut options = FieldOptions::default();
 
     let mut retained = Vec::new();
-    for attr in field
-        .attrs
-        .drain(..)
-    {
-        if attr
-            .path()
-            .is_ident("field")
-        {
+    for attr in field.attrs.drain(..) {
+        if attr.path().is_ident("field") {
             let parsed = attr.parse_args_with(FieldOptions::parse)?;
             options.merge(parsed)?;
         } else {
@@ -162,13 +147,7 @@ fn parse_field(field: &mut Field) -> Result<FieldSpec> {
 
     options.validate(&field.ty, &ident)?;
 
-    Ok(FieldSpec {
-        ident,
-        ty: field
-            .ty
-            .clone(),
-        options,
-    })
+    Ok(FieldSpec { ident, ty: field.ty.clone(), options })
 }
 
 impl FieldOptions {
@@ -186,9 +165,7 @@ impl FieldOptions {
                 MetaEntry::Optional(flag) => options.optional = flag.value(),
                 MetaEntry::Default(expr) => options.default = Some(expr),
                 MetaEntry::Nested => options.nested = true,
-                MetaEntry::Validator(expr) => options
-                    .validators
-                    .push(expr),
+                MetaEntry::Validator(expr) => options.validators.push(expr),
                 MetaEntry::Short(lit) => options.short = Some(lit.value()),
                 MetaEntry::Help(value) => options.help = Some(value.value()),
                 MetaEntry::NoCli => options.no_cli = true,
@@ -200,31 +177,19 @@ impl FieldOptions {
 
     // TODO: refactor this in a more efficient way
     fn merge(&mut self, other: FieldOptions) -> Result<()> {
-        if other
-            .rename
-            .is_some()
-        {
+        if other.rename.is_some() {
             self.rename = other.rename;
         }
         if other.insensitive {
             self.insensitive = true;
         }
-        if other
-            .env
-            .is_some()
-        {
+        if other.env.is_some() {
             self.env = other.env;
         }
-        if other
-            .cli
-            .is_some()
-        {
+        if other.cli.is_some() {
             self.cli = other.cli;
         }
-        if other
-            .default
-            .is_some()
-        {
+        if other.default.is_some() {
             self.default = other.default;
         }
         if other.optional {
@@ -233,23 +198,13 @@ impl FieldOptions {
         if other.nested {
             self.nested = true;
         }
-        if !other
-            .validators
-            .is_empty()
-        {
-            self.validators
-                .extend(other.validators);
+        if !other.validators.is_empty() {
+            self.validators.extend(other.validators);
         }
-        if other
-            .short
-            .is_some()
-        {
+        if other.short.is_some() {
             self.short = other.short;
         }
-        if other
-            .help
-            .is_some()
-        {
+        if other.help.is_some() {
             self.help = other.help;
         }
         if other.no_cli {
@@ -262,11 +217,7 @@ impl FieldOptions {
         if self.optional && !is_option_type(ty) {
             return Err(Error::new(ident.span(), "optional fields must use Option<T>"));
         }
-        if self.optional
-            && self
-                .default
-                .is_some()
-        {
+        if self.optional && self.default.is_some() {
             return Err(Error::new(ident.span(), "an optional field cannot declare a default"));
         }
         Ok(())
@@ -301,10 +252,7 @@ impl Parse for MetaEntry {
 
         input.parse::<Token![=]>()?;
 
-        match ident
-            .to_string()
-            .as_str()
-        {
+        match ident.to_string().as_str() {
             "name" => Ok(MetaEntry::Rename(input.parse()?)),
             "insensitive" => Ok(MetaEntry::Insensitive(input.parse()?)),
             "env" => Ok(MetaEntry::Env(input.parse()?)),
@@ -319,12 +267,18 @@ impl Parse for MetaEntry {
     }
 }
 
+pub fn is_vec_type(ty: &Type) -> bool {
+    if let Type::Path(path) = ty
+        && let Some(segment) = path.path.segments.last()
+    {
+        return segment.ident == "Vec";
+    }
+    false
+}
+
 fn is_option_type(ty: &Type) -> bool {
     if let Type::Path(path) = ty
-        && let Some(segment) = path
-            .path
-            .segments
-            .last()
+        && let Some(segment) = path.path.segments.last()
     {
         return segment.ident == "Option";
     }

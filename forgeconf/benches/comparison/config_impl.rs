@@ -24,9 +24,7 @@ pub struct ConfigSimple {
 
 impl SimpleConfig for ConfigSimple {
     fn from_file(path: &Path) -> ConfigResult<Self> {
-        let config = Config::builder()
-            .add_source(File::from(path))
-            .build()?;
+        let config = Config::builder().add_source(File::from(path)).build()?;
         Ok(config.try_deserialize()?)
     }
 
@@ -92,9 +90,7 @@ pub struct ConfigNested {
 
 impl NestedConfig for ConfigNested {
     fn from_file(path: &Path) -> ConfigResult<Self> {
-        let config = Config::builder()
-            .add_source(File::from(path))
-            .build()?;
+        let config = Config::builder().add_source(File::from(path)).build()?;
         Ok(config.try_deserialize()?)
     }
 
@@ -221,9 +217,7 @@ pub struct ConfigComplex {
 
 impl ComplexConfig for ConfigComplex {
     fn from_file(path: &Path) -> ConfigResult<Self> {
-        let config = Config::builder()
-            .add_source(File::from(path))
-            .build()?;
+        let config = Config::builder().add_source(File::from(path)).build()?;
         Ok(config.try_deserialize()?)
     }
 

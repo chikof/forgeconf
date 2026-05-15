@@ -40,43 +40,13 @@ fn main() {
             println!("✓ Configuration loaded successfully!");
             println!("\nApplication: {}", config.app_name);
             println!("\nDatabase:");
-            println!(
-                "  Host:     {}",
-                config
-                    .database
-                    .host
-            );
-            println!(
-                "  Port:     {}",
-                config
-                    .database
-                    .port
-            );
-            println!(
-                "  User:     {}",
-                config
-                    .database
-                    .username
-            );
-            println!(
-                "  Database: {}",
-                config
-                    .database
-                    .database
-            );
+            println!("  Host:     {}", config.database.host);
+            println!("  Port:     {}", config.database.port);
+            println!("  User:     {}", config.database.username);
+            println!("  Database: {}", config.database.database);
             println!("\nLogging:");
-            println!(
-                "  Level:  {}",
-                config
-                    .logging
-                    .level
-            );
-            println!(
-                "  Format: {}",
-                config
-                    .logging
-                    .format
-            );
+            println!("  Level:  {}", config.logging.level);
+            println!("  Format: {}", config.logging.format);
         },
         Err(e) => {
             eprintln!("✗ Failed to load configuration:\n{:?}", e);

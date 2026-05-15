@@ -18,12 +18,7 @@ fn convert(value: JsonValue) -> ConfigNode {
         JsonValue::Number(num) => ConfigNode::Scalar(num.to_string()),
         JsonValue::String(text) => ConfigNode::Scalar(text),
         JsonValue::Short(short) => ConfigNode::Scalar(short.to_string()),
-        JsonValue::Array(items) => ConfigNode::Array(
-            items
-                .into_iter()
-                .map(convert)
-                .collect(),
-        ),
+        JsonValue::Array(items) => ConfigNode::Array(items.into_iter().map(convert).collect()),
         JsonValue::Object(map) => {
             let entries = map
                 .into_iter()
@@ -47,23 +42,9 @@ mod tests {
             }
         "#;
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            table
-                .get("port")
-                .unwrap()
-                .to_string(),
-            "8080"
-        );
-        assert_eq!(
-            table
-                .get("host")
-                .unwrap()
-                .to_string(),
-            "localhost"
-        );
+        let table = node.as_table().unwrap();
+        assert_eq!(table.get("port").unwrap().to_string(), "8080");
+        assert_eq!(table.get("host").unwrap().to_string(), "localhost");
     }
 
     #[test]
@@ -77,26 +58,10 @@ mod tests {
             }
         "#;
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        let db = table
-            .get("database")
-            .unwrap()
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            db.get("host")
-                .unwrap()
-                .to_string(),
-            "localhost"
-        );
-        assert_eq!(
-            db.get("port")
-                .unwrap()
-                .to_string(),
-            "5432"
-        );
+        let table = node.as_table().unwrap();
+        let db = table.get("database").unwrap().as_table().unwrap();
+        assert_eq!(db.get("host").unwrap().to_string(), "localhost");
+        assert_eq!(db.get("port").unwrap().to_string(), "5432");
     }
 
     #[test]
@@ -107,13 +72,8 @@ mod tests {
             }
         "#;
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        match table
-            .get("tags")
-            .unwrap()
-        {
+        let table = node.as_table().unwrap();
+        match table.get("tags").unwrap() {
             ConfigNode::Array(items) => {
                 assert_eq!(items.len(), 3);
                 assert_eq!(items[0].to_string(), "api");
@@ -126,38 +86,17 @@ mod tests {
     fn handles_null_values() {
         let input = r#"{"key": null}"#;
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        assert!(matches!(
-            table
-                .get("key")
-                .unwrap(),
-            ConfigNode::Null
-        ));
+        let table = node.as_table().unwrap();
+        assert!(matches!(table.get("key").unwrap(), ConfigNode::Null));
     }
 
     #[test]
     fn handles_boolean_values() {
         let input = r#"{"enabled": true, "debug": false}"#;
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            table
-                .get("enabled")
-                .unwrap()
-                .to_string(),
-            "true"
-        );
-        assert_eq!(
-            table
-                .get("debug")
-                .unwrap()
-                .to_string(),
-            "false"
-        );
+        let table = node.as_table().unwrap();
+        assert_eq!(table.get("enabled").unwrap().to_string(), "true");
+        assert_eq!(table.get("debug").unwrap().to_string(), "false");
     }
 
     #[test]

@@ -9,10 +9,7 @@ use crate::{ConfigError, ConfigNode};
 pub fn parse(input: &str) -> Result<ConfigNode, ConfigError> {
     let docs = YamlLoader::load_from_str(input)
         .map_err(|source| ConfigError::Yaml { source, span: None })?;
-    let document = docs
-        .into_iter()
-        .next()
-        .unwrap_or(Yaml::Null);
+    let document = docs.into_iter().next().unwrap_or(Yaml::Null);
     Ok(convert(document))
 }
 
@@ -23,12 +20,7 @@ fn convert(value: Yaml) -> ConfigNode {
         Yaml::Real(text) | Yaml::String(text) => ConfigNode::Scalar(text),
         Yaml::Boolean(flag) => ConfigNode::Scalar(flag.to_string()),
         Yaml::Integer(num) => ConfigNode::Scalar(num.to_string()),
-        Yaml::Array(values) => ConfigNode::Array(
-            values
-                .into_iter()
-                .map(convert)
-                .collect(),
-        ),
+        Yaml::Array(values) => ConfigNode::Array(values.into_iter().map(convert).collect()),
         Yaml::Hash(map) => {
             let entries = map
                 .into_iter()
@@ -61,23 +53,9 @@ mod tests {
             host: localhost
         "#;
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            table
-                .get("port")
-                .unwrap()
-                .to_string(),
-            "8080"
-        );
-        assert_eq!(
-            table
-                .get("host")
-                .unwrap()
-                .to_string(),
-            "localhost"
-        );
+        let table = node.as_table().unwrap();
+        assert_eq!(table.get("port").unwrap().to_string(), "8080");
+        assert_eq!(table.get("host").unwrap().to_string(), "localhost");
     }
 
     #[test]
@@ -88,26 +66,10 @@ mod tests {
               port: 5432
         "#;
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        let db = table
-            .get("database")
-            .unwrap()
-            .as_table()
-            .unwrap();
-        assert_eq!(
-            db.get("host")
-                .unwrap()
-                .to_string(),
-            "localhost"
-        );
-        assert_eq!(
-            db.get("port")
-                .unwrap()
-                .to_string(),
-            "5432"
-        );
+        let table = node.as_table().unwrap();
+        let db = table.get("database").unwrap().as_table().unwrap();
+        assert_eq!(db.get("host").unwrap().to_string(), "localhost");
+        assert_eq!(db.get("port").unwrap().to_string(), "5432");
     }
 
     #[test]
@@ -119,13 +81,8 @@ mod tests {
               - v2
         "#;
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        match table
-            .get("tags")
-            .unwrap()
-        {
+        let table = node.as_table().unwrap();
+        match table.get("tags").unwrap() {
             ConfigNode::Array(items) => {
                 assert_eq!(items.len(), 3);
                 assert_eq!(items[0].to_string(), "api");
@@ -138,15 +95,8 @@ mod tests {
     fn handles_null_values() {
         let input = "key: null";
         let node = parse(input).unwrap();
-        let table = node
-            .as_table()
-            .unwrap();
-        assert!(matches!(
-            table
-                .get("key")
-                .unwrap(),
-            ConfigNode::Null
-        ));
+        let table = node.as_table().unwrap();
+        assert!(matches!(table.get("key").unwrap(), ConfigNode::Null));
     }
 
     #[test]
