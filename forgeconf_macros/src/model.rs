@@ -137,7 +137,7 @@ fn parse_field(field: &mut Field) -> Result<FieldSpec> {
     for attr in field.attrs.drain(..) {
         if attr.path().is_ident("field") {
             let parsed = attr.parse_args_with(FieldOptions::parse)?;
-            options.merge(parsed)?;
+            options.merge(parsed);
         } else {
             retained.push(attr);
         }
@@ -175,42 +175,18 @@ impl FieldOptions {
         Ok(options)
     }
 
-    // TODO: refactor this in a more efficient way
-    fn merge(&mut self, other: FieldOptions) -> Result<()> {
-        if other.rename.is_some() {
-            self.rename = other.rename;
-        }
-        if other.insensitive {
-            self.insensitive = true;
-        }
-        if other.env.is_some() {
-            self.env = other.env;
-        }
-        if other.cli.is_some() {
-            self.cli = other.cli;
-        }
-        if other.default.is_some() {
-            self.default = other.default;
-        }
-        if other.optional {
-            self.optional = true;
-        }
-        if other.nested {
-            self.nested = true;
-        }
-        if !other.validators.is_empty() {
-            self.validators.extend(other.validators);
-        }
-        if other.short.is_some() {
-            self.short = other.short;
-        }
-        if other.help.is_some() {
-            self.help = other.help;
-        }
-        if other.no_cli {
-            self.no_cli = true;
-        }
-        Ok(())
+    fn merge(&mut self, other: FieldOptions) {
+        self.rename = other.rename.or(self.rename.take());
+        self.insensitive |= other.insensitive;
+        self.env = other.env.or(self.env.take());
+        self.cli = other.cli.or(self.cli.take());
+        self.default = other.default.or(self.default.take());
+        self.optional |= other.optional;
+        self.nested |= other.nested;
+        self.validators.extend(other.validators);
+        self.short = other.short.or(self.short);
+        self.help = other.help.or(self.help.take());
+        self.no_cli |= other.no_cli;
     }
 
     fn validate(&self, ty: &Type, ident: &Ident) -> Result<()> {
