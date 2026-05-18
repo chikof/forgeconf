@@ -29,7 +29,7 @@ clap = { version = "4", optional = true, features = ["derive"] }
 [dev-dependencies]
 regex = "1.12.3"
 criterion = "0.8.2"
-config = "0.15.21"
+config = "0.15.23"
 serde = { version = "1.0", features = ["derive"] }
 
 [[bench]]
