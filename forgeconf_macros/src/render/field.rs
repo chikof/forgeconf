@@ -4,7 +4,7 @@ use syn::{Expr, LitStr};
 
 use crate::model::FieldSpec;
 
-pub(super) fn render_field_init(field: &FieldSpec) -> TokenStream {
+pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> TokenStream {
     let ident = &field.ident;
     let ty = &field.ty;
     let key = field.options.rename.clone().unwrap_or(ident.to_string());
@@ -26,7 +26,14 @@ pub(super) fn render_field_init(field: &FieldSpec) -> TokenStream {
         quote! { map.remove(#key_lit) }
     };
 
-    let override_expr = match (field.options.cli.as_ref(), field.options.env.as_ref()) {
+    let ident_upper = ident.to_string().to_uppercase();
+    let effective_env: Option<String> = field
+        .options
+        .env
+        .clone()
+        .or_else(|| env_prefix.map(|p| format!("{}{}", p, ident_upper)));
+
+    let override_expr = match (field.options.cli.as_ref(), effective_env.as_deref()) {
         (Some(cli), Some(env)) => {
             let cli_lit = LitStr::new(cli, ident.span());
             let env_lit = LitStr::new(env, ident.span());

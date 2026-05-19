@@ -16,7 +16,10 @@ pub fn render(
     let loader_ident = format_ident!("{}Loader", ident);
 
     let add_config_stmts = args.files.iter().map(render_config_addition);
-    let field_inits = fields.iter().map(field::render_field_init);
+    let env_prefix = args.env_prefix.as_deref();
+    let field_inits = fields
+        .iter()
+        .map(|f| field::render_field_init(f, env_prefix));
 
     let parse_methods = generate_parse_methods();
     let clap_methods = clap::generate_clap_methods();

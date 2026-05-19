@@ -21,6 +21,7 @@ use syn::{
 #[derive(Default)]
 pub struct ForgeconfAttr {
     pub files: Vec<ConfigFile>,
+    pub env_prefix: Option<String>,
 }
 
 pub struct ConfigFile {
@@ -54,23 +55,32 @@ pub struct FieldOptions {
 impl Parse for ForgeconfAttr {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut files = Vec::new();
+        let mut env_prefix = None;
 
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
-            if ident != "config" {
-                return Err(Error::new(ident.span(), "expected `config(...)`"));
-            }
 
-            let content;
-            syn::parenthesized!(content in input);
-            files.push(ConfigFile::parse(&content)?);
+            if ident == "config" {
+                let content;
+                syn::parenthesized!(content in input);
+                files.push(ConfigFile::parse(&content)?);
+            } else if ident == "env_prefix" {
+                input.parse::<Token![=]>()?;
+                let lit: LitStr = input.parse()?;
+                env_prefix = Some(lit.value());
+            } else {
+                return Err(Error::new(
+                    ident.span(),
+                    "expected `config(...)` or `env_prefix = \"...\"`",
+                ));
+            }
 
             if input.peek(Token![,]) {
                 input.parse::<Token![,]>()?;
             }
         }
 
-        Ok(Self { files })
+        Ok(Self { files, env_prefix })
     }
 }
 
