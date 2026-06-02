@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[cfg(feature = "dotenv")]
 mod tests {
     use forgeconf::{ConfigError, DotenvSource, forgeconf};

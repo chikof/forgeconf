@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use forgeconf::forgeconf;
 
 // #[forgeconf] must be outermost so it can strip #[derive(Debug)] before the

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use forgeconf::forgeconf;
 
 // Primary key "port" with alias "port_number" — fixture uses "port" so primary
