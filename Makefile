@@ -8,11 +8,11 @@ test-code:
 
 .PHONY: test-format
 test-format:
-	cargo +nightly fmt --all -- --check
+	cargo fmt --all -- --check
 
 .PHONY: test-clippy
 test-clippy:
-	cargo +nightly clippy --all
+	cargo clippy --all
 
 .PHONY: test-coverage-get
 test-coverage-get:

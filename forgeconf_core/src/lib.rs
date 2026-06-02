@@ -20,6 +20,8 @@ pub use parser::parse_yaml;
 pub use parser::{FileFormat, load_from_path};
 #[cfg(feature = "dotenv")]
 pub use source::DotenvSource;
+#[cfg(feature = "watch")]
+pub use source::WatchSource;
 #[cfg(feature = "cli")]
 pub use source::{CliArgsSource, CliArguments};
 pub use source::{ConfigBuilder, ConfigFile, ConfigSource, merge_nodes};

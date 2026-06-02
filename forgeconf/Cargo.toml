@@ -12,6 +12,7 @@ repository = "https://github.com/chikof/forgeconf"
 [features]
 default = ["toml", "yaml", "cli", "validators", "parse"]
 dotenv = ["forgeconf_core/dotenv"]
+watch = ["forgeconf_core/watch"]
 toml = ["forgeconf_macros/toml", "forgeconf_core/toml"]
 yaml = ["forgeconf_macros/yaml", "forgeconf_core/yaml"]
 json = ["forgeconf_macros/json", "forgeconf_core/json"]

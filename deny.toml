@@ -1,0 +1,20 @@
+[graph]
+all-features = true
+no-default-features = false
+
+[licenses]
+confidence-threshold = 0.80
+
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "ISC",
+    "Zlib",
+    "BSD-3-Clause",
+]
+
+[licenses.private]
+ignore = false

@@ -49,8 +49,11 @@ pub trait ForgeconfClap {
         out: &mut std::collections::BTreeMap<String, String>,
     );
 }
+
 #[cfg(feature = "dotenv")]
 pub use forgeconf_core::DotenvSource;
+#[cfg(feature = "watch")]
+pub use forgeconf_core::WatchSource;
 #[cfg(all(feature = "parse", feature = "json"))]
 pub use forgeconf_core::parse_json;
 #[cfg(feature = "parse")]
