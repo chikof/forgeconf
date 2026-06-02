@@ -50,6 +50,7 @@ pub struct FieldOptions {
     pub short: Option<char>,
     pub help: Option<String>,
     pub no_cli: bool,
+    pub deprecated: Option<String>,
 }
 
 impl Parse for ForgeconfAttr {
@@ -179,6 +180,7 @@ impl FieldOptions {
                 MetaEntry::Short(lit) => options.short = Some(lit.value()),
                 MetaEntry::Help(value) => options.help = Some(value.value()),
                 MetaEntry::NoCli => options.no_cli = true,
+                MetaEntry::Deprecated(value) => options.deprecated = Some(value.value()),
             }
         }
 
@@ -197,6 +199,7 @@ impl FieldOptions {
         self.short = other.short.or(self.short);
         self.help = other.help.or(self.help.take());
         self.no_cli |= other.no_cli;
+        self.deprecated = other.deprecated.or(self.deprecated.take());
     }
 
     fn validate(&self, ty: &Type, ident: &Ident) -> Result<()> {
@@ -222,6 +225,7 @@ enum MetaEntry {
     Short(LitChar),
     Help(LitStr),
     NoCli,
+    Deprecated(LitStr),
 }
 
 impl Parse for MetaEntry {
@@ -234,6 +238,9 @@ impl Parse for MetaEntry {
         }
         if ident == "no_cli" {
             return Ok(MetaEntry::NoCli);
+        }
+        if ident == "deprecated" && !input.peek(Token![=]) {
+            return Ok(MetaEntry::Deprecated(LitStr::new("", ident.span())));
         }
 
         input.parse::<Token![=]>()?;
@@ -248,6 +255,7 @@ impl Parse for MetaEntry {
             "validate" => Ok(MetaEntry::Validator(input.parse()?)),
             "short" => Ok(MetaEntry::Short(input.parse()?)),
             "help" => Ok(MetaEntry::Help(input.parse()?)),
+            "deprecated" => Ok(MetaEntry::Deprecated(input.parse()?)),
             other => Err(Error::new(ident.span(), format!("unknown field attribute `{other}`"))),
         }
     }

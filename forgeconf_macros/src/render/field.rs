@@ -123,9 +123,11 @@ pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> 
     };
 
     let validator_calls = render_validator_calls(field, &key_lit, &value_ident);
+    let deprecated_warn = render_deprecated_warn(field, &key_lit);
 
     quote! {
         #ident: {
+            #deprecated_warn
             let #value_ident = { #base_expr };
             #validator_calls
             #value_ident
@@ -150,6 +152,22 @@ enum FieldKind<'a> {
     Default(&'a Expr),
     Scalar,
     Nested,
+}
+
+fn render_deprecated_warn(field: &FieldSpec, key_lit: &LitStr) -> TokenStream {
+    let Some(msg) = field.options.deprecated.as_deref() else {
+        return TokenStream::new();
+    };
+    if msg.is_empty() {
+        quote! {
+            eprintln!("[forgeconf] warning: config field `{}` is deprecated", #key_lit);
+        }
+    } else {
+        let msg_lit = LitStr::new(msg, key_lit.span());
+        quote! {
+            eprintln!("[forgeconf] warning: config field `{}` is deprecated: {}", #key_lit, #msg_lit);
+        }
+    }
 }
 
 fn render_validator_calls(
