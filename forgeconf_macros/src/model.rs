@@ -50,6 +50,7 @@ pub struct FieldOptions {
     pub short: Option<char>,
     pub help: Option<String>,
     pub no_cli: bool,
+    pub sensitive: bool,
     pub deprecated: Option<String>,
 }
 
@@ -136,6 +137,22 @@ pub fn collect_fields(item: &mut ItemStruct) -> Result<Vec<FieldSpec>> {
     Ok(specs)
 }
 
+const FIELD_ATTR_NAMES: &[&str] = &[
+    "name",
+    "insensitive",
+    "env",
+    "cli",
+    "optional",
+    "default",
+    "nested",
+    "validate",
+    "short",
+    "help",
+    "no_cli",
+    "sensitive",
+    "deprecated",
+];
+
 fn parse_field(field: &mut Field) -> Result<FieldSpec> {
     let ident = field
         .ident
@@ -149,6 +166,14 @@ fn parse_field(field: &mut Field) -> Result<FieldSpec> {
         if attr.path().is_ident("field") {
             let parsed = attr.parse_args_with(FieldOptions::parse)?;
             options.merge(parsed);
+        } else if is_shorthand_field_attr(&attr) {
+            use quote::ToTokens;
+            use syn::parse::Parser;
+            let tokens = attr.meta.to_token_stream();
+            let parsed = FieldOptions::parse
+                .parse2(tokens)
+                .map_err(|e| Error::new(attr.path().span(), e.to_string()))?;
+            options.merge(parsed);
         } else {
             retained.push(attr);
         }
@@ -159,6 +184,14 @@ fn parse_field(field: &mut Field) -> Result<FieldSpec> {
     options.validate(&field.ty, &ident)?;
 
     Ok(FieldSpec { ident, ty: field.ty.clone(), options })
+}
+
+fn is_shorthand_field_attr(attr: &syn::Attribute) -> bool {
+    matches!(attr.meta, syn::Meta::Path(_) | syn::Meta::NameValue(_))
+        && attr
+            .path()
+            .get_ident()
+            .is_some_and(|i| FIELD_ATTR_NAMES.contains(&i.to_string().as_str()))
 }
 
 impl FieldOptions {
@@ -180,6 +213,7 @@ impl FieldOptions {
                 MetaEntry::Short(lit) => options.short = Some(lit.value()),
                 MetaEntry::Help(value) => options.help = Some(value.value()),
                 MetaEntry::NoCli => options.no_cli = true,
+                MetaEntry::Sensitive => options.sensitive = true,
                 MetaEntry::Deprecated(value) => options.deprecated = Some(value.value()),
             }
         }
@@ -199,6 +233,7 @@ impl FieldOptions {
         self.short = other.short.or(self.short);
         self.help = other.help.or(self.help.take());
         self.no_cli |= other.no_cli;
+        self.sensitive |= other.sensitive;
         self.deprecated = other.deprecated.or(self.deprecated.take());
     }
 
@@ -225,6 +260,7 @@ enum MetaEntry {
     Short(LitChar),
     Help(LitStr),
     NoCli,
+    Sensitive,
     Deprecated(LitStr),
 }
 
@@ -238,6 +274,9 @@ impl Parse for MetaEntry {
         }
         if ident == "no_cli" {
             return Ok(MetaEntry::NoCli);
+        }
+        if ident == "sensitive" {
+            return Ok(MetaEntry::Sensitive);
         }
         if ident == "deprecated" && !input.peek(Token![=]) {
             return Ok(MetaEntry::Deprecated(LitStr::new("", ident.span())));

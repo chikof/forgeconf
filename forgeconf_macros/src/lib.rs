@@ -19,6 +19,6 @@ fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let args = syn::parse::<ForgeconfAttr>(attr)?;
     let mut item = syn::parse::<ItemStruct>(item)?;
     let fields = collect_fields(&mut item)?;
-    let tokens = render::render(&item, &args, &fields)?;
+    let tokens = render::render(&mut item, &args, &fields)?;
     Ok(tokens.into())
 }
