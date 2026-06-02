@@ -1,0 +1,8 @@
+- [x] `alias` on field — accepts both name and alias
+- [ ] `HashMap<K,V>` + `PathBuf` `FromNode` impls
+- [x] `sensitive` field — secure debug print (`***`)
+- [ ] `struct-level validator` — `#[forgeconf(validate = fn)]` called after all fields loaded
+- [x] `DotenvSource` — reads `.env` file
+- [ ] `WatchSource` wrapper — notify-based hot-reload via channel [#25](https://github.com/chikof/forgeconf/issues/25)
+- [ ] Schema generation — `Config::json_schema()`
+- [x] `deprecated` field — runtime warning

@@ -22,11 +22,8 @@ pub fn render(
     let loader_ident = format_ident!("{}Loader", ident);
 
     let add_config_stmts = args.files.iter().map(render_config_addition);
-    let debug_impl = if has_sensitive {
-        generate_debug_impl(ident, fields)
-    } else {
-        TokenStream::new()
-    };
+    let debug_impl =
+        if has_sensitive { generate_debug_impl(ident, fields) } else { TokenStream::new() };
     let env_prefix = args.env_prefix.as_deref();
     let field_inits = fields
         .iter()
@@ -112,11 +109,7 @@ fn strip_debug_derive(item: &mut ItemStruct) {
             };
             let filtered: Punctuated<Path, Token![,]> =
                 paths.into_iter().filter(|p| !p.is_ident("Debug")).collect();
-            if filtered.is_empty() {
-                None
-            } else {
-                Some(syn::parse_quote!(#[derive(#filtered)]))
-            }
+            if filtered.is_empty() { None } else { Some(syn::parse_quote!(#[derive(#filtered)])) }
         })
         .collect();
 }

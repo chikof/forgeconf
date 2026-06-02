@@ -19,7 +19,9 @@ pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> 
         .collect();
     let lookup_expr = {
         let primary = single_lookup(field.options.insensitive, &key_lit);
-        let alias_lookups = alias_lits.iter().map(|a| single_lookup(field.options.insensitive, a));
+        let alias_lookups = alias_lits
+            .iter()
+            .map(|a| single_lookup(field.options.insensitive, a));
         quote! { #primary #(.or_else(|| #alias_lookups))* }
     };
 

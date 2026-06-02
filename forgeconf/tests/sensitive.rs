@@ -1,6 +1,7 @@
 use forgeconf::forgeconf;
 
-// #[forgeconf] must be outermost so it can strip #[derive(Debug)] before the derive runs.
+// #[forgeconf] must be outermost so it can strip #[derive(Debug)] before the
+// derive runs.
 #[forgeconf(config(path = "tests/fixtures/basic.toml"))]
 #[derive(Debug)]
 struct SensitiveConfig {

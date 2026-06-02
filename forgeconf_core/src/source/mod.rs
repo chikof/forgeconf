@@ -2,10 +2,14 @@ use crate::{ConfigError, ConfigNode};
 
 #[cfg(feature = "cli")]
 mod cli;
+#[cfg(feature = "dotenv")]
+mod dotenv;
 mod file;
 
 #[cfg(feature = "cli")]
 pub use cli::{CliArgsSource, CliArguments};
+#[cfg(feature = "dotenv")]
+pub use dotenv::DotenvSource;
 pub use file::ConfigFile;
 
 /// Trait implemented by configuration sources (files, CLI, etc).

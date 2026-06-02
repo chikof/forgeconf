@@ -1,6 +1,7 @@
 use forgeconf::forgeconf;
 
-// Primary key "port" with alias "port_number" — fixture uses "port" so primary wins.
+// Primary key "port" with alias "port_number" — fixture uses "port" so primary
+// wins.
 #[forgeconf(config(path = "tests/fixtures/alias.toml"))]
 struct AliasConfig {
     #[field(alias = "port_number")]
@@ -8,7 +9,8 @@ struct AliasConfig {
     database_url: String,
 }
 
-// Fixture only has the alias key, not the primary — alias fallback must kick in.
+// Fixture only has the alias key, not the primary — alias fallback must kick
+// in.
 #[forgeconf(config(path = "tests/fixtures/alias_only.toml"))]
 struct AliasFallbackConfig {
     #[field(alias = "port_number")]
