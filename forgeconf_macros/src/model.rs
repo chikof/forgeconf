@@ -52,6 +52,7 @@ pub struct FieldOptions {
     pub no_cli: bool,
     pub sensitive: bool,
     pub deprecated: Option<String>,
+    pub aliases: Vec<String>,
 }
 
 impl Parse for ForgeconfAttr {
@@ -151,6 +152,7 @@ const FIELD_ATTR_NAMES: &[&str] = &[
     "no_cli",
     "sensitive",
     "deprecated",
+    "alias",
 ];
 
 fn parse_field(field: &mut Field) -> Result<FieldSpec> {
@@ -215,6 +217,7 @@ impl FieldOptions {
                 MetaEntry::NoCli => options.no_cli = true,
                 MetaEntry::Sensitive => options.sensitive = true,
                 MetaEntry::Deprecated(value) => options.deprecated = Some(value.value()),
+                MetaEntry::Alias(value) => options.aliases.push(value.value()),
             }
         }
 
@@ -235,6 +238,7 @@ impl FieldOptions {
         self.no_cli |= other.no_cli;
         self.sensitive |= other.sensitive;
         self.deprecated = other.deprecated.or(self.deprecated.take());
+        self.aliases.extend(other.aliases);
     }
 
     fn validate(&self, ty: &Type, ident: &Ident) -> Result<()> {
@@ -262,6 +266,7 @@ enum MetaEntry {
     NoCli,
     Sensitive,
     Deprecated(LitStr),
+    Alias(LitStr),
 }
 
 impl Parse for MetaEntry {
@@ -295,6 +300,7 @@ impl Parse for MetaEntry {
             "short" => Ok(MetaEntry::Short(input.parse()?)),
             "help" => Ok(MetaEntry::Help(input.parse()?)),
             "deprecated" => Ok(MetaEntry::Deprecated(input.parse()?)),
+            "alias" => Ok(MetaEntry::Alias(input.parse()?)),
             other => Err(Error::new(ident.span(), format!("unknown field attribute `{other}`"))),
         }
     }

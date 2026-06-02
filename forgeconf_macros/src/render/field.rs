@@ -11,19 +11,16 @@ pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> 
     let key_lit = LitStr::new(&key, ident.span());
     let value_ident = format_ident!("__forgeconf_value");
 
-    let lookup_expr = if field.options.insensitive {
-        quote! {
-            {
-                let target = #key_lit;
-                let actual = map
-                    .keys()
-                    .find(|candidate| candidate.eq_ignore_ascii_case(target))
-                    .cloned();
-                actual.and_then(|real| map.remove(&real))
-            }
-        }
-    } else {
-        quote! { map.remove(#key_lit) }
+    let alias_lits: Vec<LitStr> = field
+        .options
+        .aliases
+        .iter()
+        .map(|a| LitStr::new(a, ident.span()))
+        .collect();
+    let lookup_expr = {
+        let primary = single_lookup(field.options.insensitive, &key_lit);
+        let alias_lookups = alias_lits.iter().map(|a| single_lookup(field.options.insensitive, a));
+        quote! { #primary #(.or_else(|| #alias_lookups))* }
     };
 
     let ident_upper = ident.to_string().to_uppercase();
@@ -167,6 +164,23 @@ fn render_deprecated_warn(field: &FieldSpec, key_lit: &LitStr) -> TokenStream {
         quote! {
             eprintln!("[forgeconf] warning: config field `{}` is deprecated: {}", #key_lit, #msg_lit);
         }
+    }
+}
+
+fn single_lookup(insensitive: bool, key_lit: &LitStr) -> TokenStream {
+    if insensitive {
+        quote! {
+            {
+                let target = #key_lit;
+                let actual = map
+                    .keys()
+                    .find(|candidate| candidate.eq_ignore_ascii_case(target))
+                    .cloned();
+                actual.and_then(|real| map.remove(&real))
+            }
+        }
+    } else {
+        quote! { map.remove(#key_lit) }
     }
 }
 

@@ -1,0 +1,2 @@
+port_number = 8080
+database_url = "postgres://localhost/app"
