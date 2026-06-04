@@ -158,7 +158,8 @@ impl std::fmt::Debug for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(feature = "miette")]
         {
-            // When miette feature is enabled, delegate to miette's Diagnostic formatting
+            // When miette feature is enabled, delegate to miette's Diagnostic
+            // formatting
             use miette::GraphicalReportHandler;
 
             let mut output = String::new();

@@ -40,7 +40,8 @@ fn env_prefix_sets_env_var_for_each_field() -> Result<(), ConfigError> {
 
 #[test]
 fn env_prefix_falls_through_to_config_when_var_unset() -> Result<(), ConfigError> {
-    // PFXB_* vars are never set by any test — falls through to config file values.
+    // PFXB_* vars are never set by any test — falls through to config file
+    // values.
     let cfg = PrefixFallbackConfig::loader().load()?;
 
     assert_eq!(cfg.port, 3000);

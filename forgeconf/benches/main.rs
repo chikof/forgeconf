@@ -61,9 +61,10 @@ fn bench_simple_from_file(c: &mut Criterion) {
     });
 
     // To add a new crate, add another bench_with_input here:
-    // group.bench_with_input(BenchmarkId::new("yourcrate", "simple"), &path, |b,
-    // path| {     b.iter(|| {
-    //         let config = YourCrateSimple::from_file(black_box(path)).unwrap();
+    // group.bench_with_input(BenchmarkId::new("yourcrate", "simple"), &path,
+    // |b, path| {     b.iter(|| {
+    //         let config =
+    // YourCrateSimple::from_file(black_box(path)).unwrap();
     //         black_box(config);
     //     });
     // });

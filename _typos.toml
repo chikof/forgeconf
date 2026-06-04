@@ -1,0 +1,7 @@
+[files]
+extend-exclude = ["Cargo.lock", "deny.toml"]
+
+[default.extend-words]
+# "`Box::pin`ned" in docs/rust-style.md splits into the token "ned".
+ned = "ned"
+lits = "lits" # syn::LitStr values in forgeconf_macros

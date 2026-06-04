@@ -1,0 +1,10 @@
+# Lint public API types too: layout lints (option_option, box_collection, rc_buffer, ...) skip `pub` signatures by default.
+avoid-breaking-exported-api = false
+# 128 B: an enum whose largest variant exceeds this gets boxed.
+enum-variant-size-threshold = 128
+# Futures above 4 KiB must be boxed (Box::pin) before awaiting/spawning.
+future-size-threshold = 4096
+# Copy types up to two words go by value.
+trivial-copy-size-limit = 16
+# `Result<_, E>` with an `E` above 128 B: box the error (`result_large_err`, on by default).
+large-error-threshold = 128
