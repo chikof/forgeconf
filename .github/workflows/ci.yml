@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  lint-and-test:
+  check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -26,18 +26,55 @@ jobs:
         with:
           prefix-key: forgeconf
 
-      - name: Check formatting
-        run: cargo +nightly fmt --all -- --check
+      - name: Install cargo-deny and typos
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,typos-cli
 
-      - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Run the gate
+        run: scripts/check.sh
 
-      - name: Run tests
-        run: cargo test --workspace --all-features
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install MSRV toolchain
+        uses: dtolnay/rust-toolchain@1.85
+
+      - name: Cache cargo directories
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: forgeconf-msrv
+
+      - name: Check on MSRV
+        run: cargo check --workspace --all-features --locked
+
+  features:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features: ["", "toml", "json", "yaml", "cli"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo directories
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: forgeconf-features
+
+      - name: Test feature set
+        run: cargo test -p forgeconf --no-default-features --features "${{ matrix.features }}" --locked
 
   coverage:
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout repository

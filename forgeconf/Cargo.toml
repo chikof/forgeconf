@@ -3,6 +3,7 @@ name = "forgeconf"
 description = "Declarative configuration loader for Rust structs powered by attribute macros."
 version = "0.5.0"
 edition = "2024"
+rust-version = "1.85"
 authors = ["Chiko <chiko@envs.net>"]
 license = "MIT"
 keywords = ["configuration", "macro", "toml", "yaml", "json"]
