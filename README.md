@@ -36,16 +36,14 @@ Add Forgeconf to your workspace:
 forgeconf = "0.3"
 ```
 
-The crate enables TOML, YAML, and regex-powered validators by default. Add `json` if you want JSON support, or disable defaults to pick a subset:
+The crate enables TOML and YAML by default. Add `json` if you want JSON support, or disable defaults to pick a subset:
 
 ```toml
 [dependencies.forgeconf]
 version = "0.3"
 default-features = false
-features = ["json", "regex"]
+features = ["json"]
 ```
-
-Disable `regex` if you want to skip the `regex` crate entirely, or re-enable it explicitly (as shown above) when using `validators::matches_regex`.
 
 ## Quick start
 
@@ -122,7 +120,6 @@ struct SecureConfig {
     #[field(
         validate = ensure_https,
         validate = forgeconf::validators::len_range(12, 128),
-        validate = forgeconf::validators::matches_regex(regex::Regex::new("^https://").unwrap()),
     )]
     endpoint: String,
 }
@@ -133,7 +130,6 @@ The most common helpers:
 - `non_empty()`, `min_len(n)`, `max_len(n)`, and `len_range(min, max)` – work with any type implementing `validators::HasLen` (Strings, Vecs, maps, sets, …).
 - `range(min, max)` – enforce numeric/string bounds via `PartialOrd`.
 - `one_of([..])` – restrict values to a predefined set.
-- `matches_regex(regex::Regex)` – ensure the value matches a regular expression (enable the `regex` Cargo feature and add the [`regex`](https://crates.io/crates/regex) crate to your `Cargo.toml` when using this helper).
 
 Each helper returns a closure that you can combine or wrap to build higher-level policies.
 

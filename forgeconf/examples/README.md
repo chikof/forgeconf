@@ -196,7 +196,7 @@ The `fixtures/` directory contains sample configuration files used by the exampl
 Some examples require specific feature flags:
 
 - **Default features**: `toml`, `yaml`, `cli`, `validators`, `parse`
-- **Optional features**: `json`, `regex`, `miette`
+- **Optional features**: `json`, `miette`
 
 The `miette` feature enables beautiful error diagnostics with fancy formatting.
 

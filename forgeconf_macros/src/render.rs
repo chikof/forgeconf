@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::{Ident, ItemStruct, Path, Result, Token};
 
-use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr};
+use crate::model::{ConfigFile, FieldSpec, ForgeconfAttr, FormatToken};
 
 mod clap;
 mod field;
@@ -178,13 +178,13 @@ fn render_config_addition(cfg: &ConfigFile) -> TokenStream {
         .format
         .as_ref()
         .map(|fmt| match fmt {
-            forgeconf_core::FileFormat::Toml => {
+            FormatToken::Toml => {
                 quote! { .with_format(::forgeconf::FileFormat::Toml) }
             },
-            forgeconf_core::FileFormat::Yaml => {
+            FormatToken::Yaml => {
                 quote! { .with_format(::forgeconf::FileFormat::Yaml) }
             },
-            forgeconf_core::FileFormat::Json => {
+            FormatToken::Json => {
                 quote! { .with_format(::forgeconf::FileFormat::Json) }
             },
         })

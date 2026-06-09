@@ -2,9 +2,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 use std::hash::Hash;
 
-#[cfg(feature = "regex")]
-use regex::Regex;
-
 use crate::ConfigError;
 
 /// Trait for values whose length can be queried.
@@ -165,22 +162,6 @@ where
     }
 }
 
-/// Ensure the textual value satisfies the provided regular expression.
-#[cfg(feature = "regex")]
-pub fn matches_regex<T>(pattern: Regex) -> impl Fn(&T, &str) -> Result<(), ConfigError>
-where
-    T: AsRef<str> + Display,
-{
-    let label = format!("match /{}/", pattern.as_str());
-    move |value, key| {
-        if pattern.is_match(value.as_ref()) {
-            Ok(())
-        } else {
-            Err(ConfigError::mismatch(key, label.clone(), value.to_string()))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,19 +236,6 @@ mod tests {
             err,
             ConfigError::TypeMismatch { field, expected, found, .. }
                 if field == "level" && expected.contains("debug") && found == "warn"
-        ));
-    }
-
-    #[cfg(feature = "regex")]
-    #[test]
-    fn matches_regex_enforces_pattern() {
-        let validator = matches_regex::<String>(Regex::new(r"^[a-z0-9_]+$").unwrap());
-        validator(&"valid_123".to_string(), "tag").unwrap();
-        let err = validator(&"Invalid!".to_string(), "tag").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch { field, expected, .. }
-                if field == "tag" && expected.starts_with("match /")
         ));
     }
 }

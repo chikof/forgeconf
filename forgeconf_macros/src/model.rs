@@ -1,4 +1,3 @@
-use forgeconf_core::FileFormat;
 use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
@@ -26,8 +25,30 @@ pub struct ForgeconfAttr {
 
 pub struct ConfigFile {
     pub path: Expr,
-    pub format: Option<FileFormat>,
+    pub format: Option<FormatToken>,
     pub priority: Option<u8>,
+}
+
+#[derive(Clone, Copy)]
+pub enum FormatToken {
+    Toml,
+    Yaml,
+    Json,
+}
+
+impl FormatToken {
+    fn parse(lit: &LitStr) -> Result<Self> {
+        let value = lit.value();
+        match value.to_lowercase().as_str() {
+            "toml" => Ok(Self::Toml),
+            "yaml" | "yml" => Ok(Self::Yaml),
+            "json" => Ok(Self::Json),
+            _ => Err(Error::new(
+                lit.span(),
+                format!("unknown format \"{value}\", expected toml, yaml or json"),
+            )),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -104,10 +125,7 @@ impl ConfigFile {
                 },
                 "format" => {
                     let lit: LitStr = input.parse()?;
-                    format =
-                        Some(lit.value().parse::<FileFormat>().map_err(|err| {
-                            Error::new(lit.span(), format!("invalid format: {err}"))
-                        })?);
+                    format = Some(FormatToken::parse(&lit)?);
                 },
                 "priority" => {
                     let lit: LitInt = input.parse()?;

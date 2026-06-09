@@ -26,6 +26,15 @@
 //! }
 //! ```
 
+extern crate self as forgeconf;
+
+mod error;
+mod node;
+mod parser;
+mod source;
+#[cfg(feature = "validators")]
+pub mod validators;
+
 #[cfg(feature = "clap")]
 pub use clap;
 
@@ -50,31 +59,22 @@ pub trait ForgeconfClap {
     );
 }
 
-#[cfg(feature = "dotenv")]
-pub use forgeconf_core::DotenvSource;
-#[cfg(feature = "watch")]
-pub use forgeconf_core::WatchSource;
-#[cfg(all(feature = "parse", feature = "json"))]
-pub use forgeconf_core::parse_json;
-#[cfg(feature = "parse")]
-pub use forgeconf_core::parse_str;
-#[cfg(all(feature = "parse", feature = "toml"))]
-pub use forgeconf_core::parse_toml;
-#[cfg(all(feature = "parse", feature = "yaml"))]
-pub use forgeconf_core::parse_yaml;
-#[cfg(feature = "validators")]
-pub use forgeconf_core::validators;
-#[cfg(feature = "cli")]
-pub use forgeconf_core::{CliArgsSource, CliArguments};
-pub use forgeconf_core::{
-    ConfigBuilder,
-    ConfigError,
-    ConfigFile,
-    ConfigNode,
-    ConfigSource,
-    FileFormat,
-    FromNode,
-    load_from_path,
-    merge_nodes,
-};
+pub use error::ConfigError;
 pub use forgeconf_macros::forgeconf;
+pub use node::{ConfigNode, FromNode};
+#[cfg(all(feature = "parse", feature = "json"))]
+pub use parser::parse_json;
+#[cfg(feature = "parse")]
+pub use parser::parse_str;
+#[cfg(all(feature = "parse", feature = "toml"))]
+pub use parser::parse_toml;
+#[cfg(all(feature = "parse", feature = "yaml"))]
+pub use parser::parse_yaml;
+pub use parser::{FileFormat, load_from_path};
+#[cfg(feature = "dotenv")]
+pub use source::DotenvSource;
+#[cfg(feature = "watch")]
+pub use source::WatchSource;
+#[cfg(feature = "cli")]
+pub use source::{CliArgsSource, CliArguments};
+pub use source::{ConfigBuilder, ConfigFile, ConfigSource, merge_nodes};

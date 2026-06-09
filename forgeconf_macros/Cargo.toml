@@ -10,18 +10,12 @@ repository = "https://github.com/chikof/forgeconf"
 readme = "../README.md"
 
 [features]
-default = ["toml"]
-toml = ["forgeconf_core/toml"]
-yaml = ["forgeconf_core/yaml"]
-json = ["forgeconf_core/json"]
 clap = []
 
 [lib]
 proc-macro = true
 
 [dependencies]
-forgeconf_core = { version = "=0.5.0", path = "../forgeconf_core" }
 proc-macro2 = "1.0.106"
 quote = "1.0.45"
 syn = { version = "2.0.117", features = ["full", "extra-traits"] }
-thiserror = "2.0.18"

@@ -29,15 +29,20 @@ jobs:
         with:
           prefix-key: forgeconf
 
-      - name: Verify tag matches crate version
+      - name: Verify tag matches crate versions
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME#v}"
-          crate_version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="forgeconf") | .version' | head -n1)
-          if [ "$tag" != "$crate_version" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match forgeconf crate version ${crate_version}"
-            exit 1
-          fi
+          for crate in forgeconf forgeconf_macros; do
+            version=$(cargo metadata --no-deps --format-version 1 | jq -r --arg n "$crate" '.packages[] | select(.name==$n) | .version' | head -n1)
+            if [ "$tag" != "$version" ]; then
+              echo "Tag ${GITHUB_REF_NAME} does not match ${crate} crate version ${version}"
+              exit 1
+            fi
+          done
+
+      - name: Run tests
+        run: cargo test --workspace --all-features --locked
 
       - name: Install git-cliff
         uses: taiki-e/install-action@v2
@@ -61,7 +66,7 @@ jobs:
             echo ""
             echo "## Published Crates"
             packages=$(cargo metadata --no-deps --format-version 1 \
-              | jq -r '.packages[] | select(.name=="forgeconf" or .name=="forgeconf_core" or .name=="forgeconf_macros") | "- `"+.name+"` `"+.version+"`"' \
+              | jq -r '.packages[] | select(.name=="forgeconf" or .name=="forgeconf_macros") | "- `"+.name+"` `"+.version+"`"' \
               | sort || true)
             if [ -n "$packages" ]; then
               printf '%s\n' "$packages"
@@ -80,17 +85,8 @@ jobs:
             printf 'EOF\n'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Publish forgeconf_core
-        run: cargo publish --package forgeconf_core
-
-      - name: Wait for forgeconf_core to propagate
-        run: sleep 20
-
       - name: Publish forgeconf_macros
         run: cargo publish --package forgeconf_macros
-
-      - name: Wait for forgeconf_macros to propagate
-        run: sleep 20
 
       - name: Publish forgeconf
         run: cargo publish --package forgeconf
