@@ -1,4 +1,6 @@
-use forgeconf::{ConfigError, forgeconf};
+#![cfg(feature = "toml")]
+
+use forgeconf::{ErrorKind, forgeconf};
 
 #[derive(Debug)]
 #[forgeconf(config(path = "tests/fixtures/basic.toml"))]
@@ -11,8 +13,7 @@ struct BrokenConfig {
 fn missing_fields_raise_useful_errors() {
     let err = BrokenConfig::loader().load().unwrap_err();
 
-    match err {
-        ConfigError::MissingValue { field, .. } => assert_eq!(field, "missing"),
-        other => panic!("unexpected error: {other:?}"),
-    }
+    assert!(matches!(err.kind(), ErrorKind::Missing));
+    assert_eq!(err.path(), "missing");
+    assert_eq!(err.to_string(), "missing: missing value");
 }

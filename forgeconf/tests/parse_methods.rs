@@ -1,4 +1,4 @@
-#![cfg(feature = "parse")]
+#![cfg(any(feature = "toml", feature = "yaml", feature = "json"))]
 
 use forgeconf::{ConfigError, forgeconf};
 

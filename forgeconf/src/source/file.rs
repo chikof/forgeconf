@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::ConfigSource;
-use crate::parser::load_from_path;
+use crate::format::load_from_path;
 use crate::{ConfigError, ConfigNode, FileFormat};
 
 /// Source backed by a configuration file on disk.

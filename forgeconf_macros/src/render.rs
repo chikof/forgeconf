@@ -35,7 +35,7 @@ pub fn render(
     let clap_companion = clap::generate_clap_companion(ident, fields);
 
     let result = quote! {
-        // Allow unexpected_cfgs to prevent warnings about parse/toml/yaml/json features
+        // Allow unexpected_cfgs to prevent warnings about toml/yaml/json features
         // that may not be defined in the consumer crate
         #[allow(unexpected_cfgs)]
         #item
@@ -48,8 +48,10 @@ pub fn render(
                 #loader_ident { builder: __builder }
             }
 
-            pub fn load_from(node: &::forgeconf::ConfigNode) -> Result<Self, ::forgeconf::ConfigError> {
-                let mut map = node.to_owned_table()?;
+            pub fn load_from(node: &::forgeconf::ConfigNode) -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+                let table = node.as_table().ok_or_else(|| {
+                    ::forgeconf::ConfigError::mismatch("table", node.kind()).with_origin(node.origin())
+                })?;
                 Ok(Self {
                     #(#field_inits),*
                 })
@@ -72,15 +74,19 @@ pub fn render(
                 self
             }
 
-            pub fn load(self) -> Result<#ident, ::forgeconf::ConfigError> {
+            pub fn load(self) -> ::core::result::Result<#ident, ::forgeconf::ConfigError> {
                 let value = self.builder.load()?;
                 #ident::load_from(&value)
             }
         }
 
         impl ::forgeconf::FromNode for #ident {
-            fn from_node(node: &::forgeconf::ConfigNode, key: &str) -> Result<Self, ::forgeconf::ConfigError> {
-                #ident::load_from(node).map_err(|err| ::forgeconf::ConfigError::nested(key, err))
+            fn from_node(node: &::forgeconf::ConfigNode) -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+                #ident::load_from(node)
+            }
+
+            fn shape() -> ::forgeconf::Shape {
+                ::forgeconf::Shape::Any
             }
         }
 
@@ -145,28 +151,28 @@ fn generate_parse_methods() -> TokenStream {
     quote! {
         /// Parse TOML text directly into this configuration struct.
         ///
-        /// Requires the `toml` and `parse` features to be enabled on `forgeconf`.
-        #[cfg(all(feature = "parse", feature = "toml"))]
-        pub fn parse_toml(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
-            let node = ::forgeconf::parse_toml(input)?;
+        /// Requires the `toml` feature to be enabled on `forgeconf`.
+        #[cfg(feature = "toml")]
+        pub fn parse_toml(input: &str) -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+            let node = ::forgeconf::parse_str(input, ::forgeconf::FileFormat::Toml)?;
             Self::load_from(&node)
         }
 
         /// Parse YAML text directly into this configuration struct.
         ///
-        /// Requires the `yaml` and `parse` features to be enabled on `forgeconf`.
-        #[cfg(all(feature = "parse", feature = "yaml"))]
-        pub fn parse_yaml(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
-            let node = ::forgeconf::parse_yaml(input)?;
+        /// Requires the `yaml` feature to be enabled on `forgeconf`.
+        #[cfg(feature = "yaml")]
+        pub fn parse_yaml(input: &str) -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+            let node = ::forgeconf::parse_str(input, ::forgeconf::FileFormat::Yaml)?;
             Self::load_from(&node)
         }
 
         /// Parse JSON text directly into this configuration struct.
         ///
-        /// Requires the `json` and `parse` features to be enabled on `forgeconf`.
-        #[cfg(all(feature = "parse", feature = "json"))]
-        pub fn parse_json(input: &str) -> Result<Self, ::forgeconf::ConfigError> {
-            let node = ::forgeconf::parse_json(input)?;
+        /// Requires the `json` feature to be enabled on `forgeconf`.
+        #[cfg(feature = "json")]
+        pub fn parse_json(input: &str) -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+            let node = ::forgeconf::parse_str(input, ::forgeconf::FileFormat::Json)?;
             Self::load_from(&node)
         }
     }

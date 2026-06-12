@@ -5,12 +5,14 @@
 //!
 //! Run with: cargo run --example multiple_formats --all-features
 
+#[cfg(any(feature = "toml", feature = "yaml", feature = "json"))]
 use std::fs;
 
 use forgeconf::forgeconf;
 
 #[derive(Debug)]
 #[forgeconf]
+#[allow(dead_code)]
 struct Config {
     name: String,
     version: String,

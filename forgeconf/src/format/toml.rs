@@ -1,32 +1,33 @@
-use std::collections::BTreeMap;
-
 use toml::Value;
 
-use crate::{ConfigError, ConfigNode};
+use crate::{ConfigError, ConfigNode, ErrorKind, Table};
 
 /// Parse TOML content into a ConfigNode tree.
 pub fn parse(input: &str) -> Result<ConfigNode, ConfigError> {
-    let value: Value =
-        toml::from_str(input).map_err(|source| ConfigError::Toml { source, span: None })?;
+    let value: Value = toml::from_str(input).map_err(|source| {
+        ConfigError::new(ErrorKind::Syntax {
+            format: "toml",
+            message: source.to_string(),
+        })
+    })?;
     Ok(convert(value))
 }
 
 /// Convert a TOML value into a ConfigNode.
 fn convert(value: Value) -> ConfigNode {
     match value {
-        Value::Boolean(flag) => ConfigNode::Scalar(flag.to_string()),
-        Value::Integer(num) => ConfigNode::Scalar(num.to_string()),
-        Value::Float(num) => ConfigNode::Scalar(num.to_string()),
-        Value::String(text) => ConfigNode::Scalar(text),
-        Value::Datetime(dt) => ConfigNode::Scalar(dt.to_string()),
-        Value::Array(values) => ConfigNode::Array(values.into_iter().map(convert).collect()),
-        Value::Table(values) => {
-            let entries = values
+        Value::Boolean(flag) => ConfigNode::scalar(flag.to_string()),
+        Value::Integer(num) => ConfigNode::scalar(num.to_string()),
+        Value::Float(num) => ConfigNode::scalar(num.to_string()),
+        Value::String(text) => ConfigNode::scalar(text),
+        Value::Datetime(dt) => ConfigNode::scalar(dt.to_string()),
+        Value::Array(values) => ConfigNode::array(values.into_iter().map(convert).collect()),
+        Value::Table(values) => ConfigNode::table(
+            values
                 .into_iter()
                 .map(|(key, value)| (key, convert(value)))
-                .collect::<BTreeMap<_, _>>();
-            ConfigNode::Table(entries)
-        },
+                .collect::<Table>(),
+        ),
     }
 }
 
@@ -45,7 +46,7 @@ mod tests {
             "#;
             let node = parse(input).unwrap();
             let table = node.as_table().unwrap();
-            assert_eq!(table.get("port").unwrap().to_string(), "8080");
+            assert_eq!(table.get("port").unwrap().as_str(), Some("8080"));
         }
 
         #[test]
@@ -56,7 +57,7 @@ mod tests {
             "#;
             let node = parse(input).unwrap();
             let table = node.as_table().unwrap();
-            assert_eq!(table.get("host").unwrap().to_string(), "localhost");
+            assert_eq!(table.get("host").unwrap().as_str(), Some("localhost"));
         }
 
         #[test]
@@ -74,7 +75,7 @@ mod tests {
                 .unwrap()
                 .as_table()
                 .unwrap();
-            assert_eq!(db.get("host").unwrap().to_string(), "localhost");
+            assert_eq!(db.get("host").unwrap().as_str(), Some("localhost"));
         }
 
         #[test]
@@ -92,7 +93,7 @@ mod tests {
                 .unwrap()
                 .as_table()
                 .unwrap();
-            assert_eq!(db.get("port").unwrap().to_string(), "5432");
+            assert_eq!(db.get("port").unwrap().as_str(), Some("5432"));
         }
 
         #[test]
@@ -100,7 +101,7 @@ mod tests {
             let input = r#"tags = ["api", "production", "v2"]"#;
             let node = parse(input).unwrap();
             let tags = node.as_table().unwrap().get("tags").unwrap();
-            assert!(matches!(tags, ConfigNode::Array(items) if items.len() == 3));
+            assert_eq!(tags.as_array().map(<[_]>::len), Some(3));
         }
 
         #[test]
@@ -108,14 +109,14 @@ mod tests {
             let input = r#"tags = ["api", "production", "v2"]"#;
             let node = parse(input).unwrap();
             let tags = node.as_table().unwrap().get("tags").unwrap();
-            assert!(matches!(tags, ConfigNode::Array(items) if items[0].to_string() == "api"));
+            assert_eq!(tags.as_array().unwrap()[0].as_str(), Some("api"));
         }
 
         #[test]
         fn should_return_error_on_invalid_toml() {
             let input = "invalid = [toml";
             let err = parse(input).unwrap_err();
-            assert!(matches!(err, ConfigError::Toml { .. }));
+            assert!(matches!(err.kind(), ErrorKind::Syntax { format: "toml", .. }));
         }
     }
 }

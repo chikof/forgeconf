@@ -151,7 +151,7 @@ pub(super) fn generate_clap_companion(ident: &syn::Ident, _fields: &[FieldSpec])
         impl ::forgeconf::clap::FromArgMatches for #companion_ident {
             fn from_arg_matches(
                 matches: &::forgeconf::clap::ArgMatches,
-            ) -> Result<Self, ::forgeconf::clap::Error> {
+            ) -> ::core::result::Result<Self, ::forgeconf::clap::Error> {
                 let mut __args = ::std::collections::BTreeMap::new();
                 <#ident as ::forgeconf::ForgeconfClap>::extract_clap_with_prefix(
                     matches, None, &mut __args,
@@ -162,7 +162,7 @@ pub(super) fn generate_clap_companion(ident: &syn::Ident, _fields: &[FieldSpec])
             fn update_from_arg_matches(
                 &mut self,
                 matches: &::forgeconf::clap::ArgMatches,
-            ) -> Result<(), ::forgeconf::clap::Error> {
+            ) -> ::core::result::Result<(), ::forgeconf::clap::Error> {
                 <#ident as ::forgeconf::ForgeconfClap>::extract_clap_with_prefix(
                     matches, None, &mut self.__args,
                 );
@@ -187,7 +187,7 @@ pub(super) fn generate_clap_companion(ident: &syn::Ident, _fields: &[FieldSpec])
                 u8::MAX
             }
 
-            fn load(&self) -> Result<::forgeconf::ConfigNode, ::forgeconf::ConfigError> {
+            fn load(&self) -> ::core::result::Result<::forgeconf::ConfigNode, ::forgeconf::ConfigError> {
                 ::forgeconf::CliArgsSource::new(self.__args.clone()).load()
             }
         }

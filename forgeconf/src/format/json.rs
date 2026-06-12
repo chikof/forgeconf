@@ -1,31 +1,32 @@
-use std::collections::BTreeMap;
-
 use jzon::JsonValue;
 
-use crate::{ConfigError, ConfigNode};
+use crate::{ConfigError, ConfigNode, ErrorKind, Table};
 
 /// Parse JSON content into a ConfigNode tree.
 pub fn parse(input: &str) -> Result<ConfigNode, ConfigError> {
-    let value = jzon::parse(input).map_err(|source| ConfigError::Json { source, span: None })?;
+    let value = jzon::parse(input).map_err(|source| {
+        ConfigError::new(ErrorKind::Syntax {
+            format: "json",
+            message: source.to_string(),
+        })
+    })?;
     Ok(convert(value))
 }
 
 /// Convert a JSON value into a ConfigNode.
 fn convert(value: JsonValue) -> ConfigNode {
     match value {
-        JsonValue::Null => ConfigNode::Null,
-        JsonValue::Boolean(flag) => ConfigNode::Scalar(flag.to_string()),
-        JsonValue::Number(num) => ConfigNode::Scalar(num.to_string()),
-        JsonValue::String(text) => ConfigNode::Scalar(text),
-        JsonValue::Short(short) => ConfigNode::Scalar(short.to_string()),
-        JsonValue::Array(items) => ConfigNode::Array(items.into_iter().map(convert).collect()),
-        JsonValue::Object(map) => {
-            let entries = map
-                .into_iter()
+        JsonValue::Null => ConfigNode::null(),
+        JsonValue::Boolean(flag) => ConfigNode::scalar(flag.to_string()),
+        JsonValue::Number(num) => ConfigNode::scalar(num.to_string()),
+        JsonValue::String(text) => ConfigNode::scalar(text),
+        JsonValue::Short(short) => ConfigNode::scalar(short.to_string()),
+        JsonValue::Array(items) => ConfigNode::array(items.into_iter().map(convert).collect()),
+        JsonValue::Object(map) => ConfigNode::table(
+            map.into_iter()
                 .map(|(key, value)| (key, convert(value)))
-                .collect::<BTreeMap<_, _>>();
-            ConfigNode::Table(entries)
-        },
+                .collect::<Table>(),
+        ),
     }
 }
 
@@ -43,8 +44,8 @@ mod tests {
         "#;
         let node = parse(input).unwrap();
         let table = node.as_table().unwrap();
-        assert_eq!(table.get("port").unwrap().to_string(), "8080");
-        assert_eq!(table.get("host").unwrap().to_string(), "localhost");
+        assert_eq!(table.get("port").unwrap().as_str(), Some("8080"));
+        assert_eq!(table.get("host").unwrap().as_str(), Some("localhost"));
     }
 
     #[test]
@@ -60,8 +61,8 @@ mod tests {
         let node = parse(input).unwrap();
         let table = node.as_table().unwrap();
         let db = table.get("database").unwrap().as_table().unwrap();
-        assert_eq!(db.get("host").unwrap().to_string(), "localhost");
-        assert_eq!(db.get("port").unwrap().to_string(), "5432");
+        assert_eq!(db.get("host").unwrap().as_str(), Some("localhost"));
+        assert_eq!(db.get("port").unwrap().as_str(), Some("5432"));
     }
 
     #[test]
@@ -73,13 +74,9 @@ mod tests {
         "#;
         let node = parse(input).unwrap();
         let table = node.as_table().unwrap();
-        match table.get("tags").unwrap() {
-            ConfigNode::Array(items) => {
-                assert_eq!(items.len(), 3);
-                assert_eq!(items[0].to_string(), "api");
-            },
-            _ => panic!("expected array"),
-        }
+        let items = table.get("tags").unwrap().as_array().unwrap();
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].as_str(), Some("api"));
     }
 
     #[test]
@@ -87,7 +84,7 @@ mod tests {
         let input = r#"{"key": null}"#;
         let node = parse(input).unwrap();
         let table = node.as_table().unwrap();
-        assert!(matches!(table.get("key").unwrap(), ConfigNode::Null));
+        assert!(table.get("key").unwrap().is_null());
     }
 
     #[test]
@@ -95,14 +92,14 @@ mod tests {
         let input = r#"{"enabled": true, "debug": false}"#;
         let node = parse(input).unwrap();
         let table = node.as_table().unwrap();
-        assert_eq!(table.get("enabled").unwrap().to_string(), "true");
-        assert_eq!(table.get("debug").unwrap().to_string(), "false");
+        assert_eq!(table.get("enabled").unwrap().as_str(), Some("true"));
+        assert_eq!(table.get("debug").unwrap().as_str(), Some("false"));
     }
 
     #[test]
     fn returns_error_on_invalid_json() {
         let input = r#"{"invalid": }"#;
         let err = parse(input).unwrap_err();
-        assert!(matches!(err, ConfigError::Json { .. }));
+        assert!(matches!(err.kind(), ErrorKind::Syntax { format: "json", .. }));
     }
 }

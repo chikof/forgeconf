@@ -1,3 +1,4 @@
+#![cfg(feature = "toml")]
 #![allow(dead_code)]
 
 use forgeconf::forgeconf;

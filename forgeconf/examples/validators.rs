@@ -3,12 +3,10 @@
 //! This example demonstrates how to use built-in validators to ensure
 //! configuration values meet specific constraints.
 //!
-//! Run with: cargo run --example validators --features validators
+//! Run with: cargo run --example validators
 
-#[cfg(feature = "validators")]
 use forgeconf::forgeconf;
 
-#[cfg(feature = "validators")]
 #[derive(Debug)]
 #[forgeconf(config(path = "examples/fixtures/validators.toml"))]
 #[allow(dead_code)]
@@ -43,7 +41,6 @@ struct ServerConfig {
     tags: Vec<String>,
 }
 
-#[cfg(feature = "validators")]
 fn main() {
     println!("=== Configuration Validation Example ===\n");
 
@@ -65,11 +62,4 @@ fn main() {
             std::process::exit(1);
         },
     }
-}
-
-#[cfg(not(feature = "validators"))]
-fn main() {
-    eprintln!("This example requires the 'validators' feature.");
-    eprintln!("Run with: cargo run --example validators --features validators");
-    std::process::exit(1);
 }

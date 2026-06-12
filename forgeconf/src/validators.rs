@@ -64,7 +64,7 @@ where
 {
     |value, key| {
         if value.len() == 0 {
-            Err(ConfigError::mismatch(key, "non-empty value", "empty value"))
+            Err(ConfigError::mismatch("non-empty value", "empty value").at_key(key))
         } else {
             Ok(())
         }
@@ -79,7 +79,8 @@ where
     move |value, key| {
         let len = value.len();
         if len < min {
-            Err(ConfigError::mismatch(key, format!("length >= {min}"), format!("length {len}")))
+            Err(ConfigError::mismatch(format!("length >= {min}"), format!("length {len}"))
+                .at_key(key))
         } else {
             Ok(())
         }
@@ -94,7 +95,8 @@ where
     move |value, key| {
         let len = value.len();
         if len > max {
-            Err(ConfigError::mismatch(key, format!("length <= {max}"), format!("length {len}")))
+            Err(ConfigError::mismatch(format!("length <= {max}"), format!("length {len}"))
+                .at_key(key))
         } else {
             Ok(())
         }
@@ -111,10 +113,10 @@ where
         let len = value.len();
         if len < min || len > max {
             Err(ConfigError::mismatch(
-                key,
                 format!("length between {min} and {max}"),
                 format!("length {len}"),
-            ))
+            )
+            .at_key(key))
         } else {
             Ok(())
         }
@@ -129,7 +131,8 @@ where
     assert!(min <= max, "range lower bound must be less than or equal to the upper bound");
     move |value, key| {
         if *value < min || *value > max {
-            Err(ConfigError::mismatch(key, format!("between {min} and {max}"), value.to_string()))
+            Err(ConfigError::mismatch(format!("between {min} and {max}"), value.to_string())
+                .at_key(key))
         } else {
             Ok(())
         }
@@ -157,24 +160,20 @@ where
         if allowed.iter().any(|candidate| candidate == value) {
             Ok(())
         } else {
-            Err(ConfigError::mismatch(key, expected.clone(), value.to_string()))
+            Err(ConfigError::mismatch(expected.clone(), value.to_string()).at_key(key))
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
     fn non_empty_is_rejected() {
         let validator = non_empty::<String>();
         let err = validator(&String::new(), "name").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch { field, expected, .. }
-                if field == "name" && expected == "non-empty value"
-        ));
+        assert_eq!(err.to_string(), "name: expected non-empty value, found \"empty value\"");
     }
 
     #[test]
@@ -187,33 +186,21 @@ mod tests {
     fn range_rejects_out_of_bounds() {
         let validator = range(1_u8, 3_u8);
         let err = validator(&0, "retries").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch { field, expected, found, .. }
-                if field == "retries" && expected == "between 1 and 3" && found == "0"
-        ));
+        assert_eq!(err.to_string(), "retries: expected between 1 and 3, found \"0\"");
     }
 
     #[test]
     fn min_len_flags_short_values() {
         let validator = min_len::<String>(3);
         let err = validator(&"ab".to_string(), "token").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch { field, expected, found, .. }
-                if field == "token" && expected == "length >= 3" && found == "length 2"
-        ));
+        assert_eq!(err.to_string(), "token: expected length >= 3, found \"length 2\"");
     }
 
     #[test]
     fn max_len_flags_long_values() {
         let validator = max_len::<Vec<u8>>(2);
         let err = validator(&vec![1, 2, 3], "bytes").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch { field, expected, found, .. }
-                if field == "bytes" && expected == "length <= 2" && found == "length 3"
-        ));
+        assert_eq!(err.to_string(), "bytes: expected length <= 2, found \"length 3\"");
     }
 
     #[test]
@@ -232,10 +219,6 @@ mod tests {
     fn one_of_rejects_non_member() {
         let validator = one_of(vec!["debug".to_string(), "info".to_string()]);
         let err = validator(&"warn".to_string(), "level").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch { field, expected, found, .. }
-                if field == "level" && expected.contains("debug") && found == "warn"
-        ));
+        assert_eq!(err.to_string(), "level: expected one of [debug, info], found \"warn\"");
     }
 }

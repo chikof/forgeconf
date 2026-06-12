@@ -1,273 +1,168 @@
-use std::any::type_name;
 use std::collections::BTreeMap;
-use std::fmt::{self, Display, Formatter};
-use std::str::FromStr;
 
-use crate::ConfigError;
+use crate::Origin;
 
-/// Representation of a configuration tree.
+/// Map of named child nodes.
+pub type Table = BTreeMap<String, ConfigNode>;
+
+/// A node of a configuration tree: a [`Value`] plus where it came from.
 #[derive(Clone, Debug, PartialEq)]
-pub enum ConfigNode {
-    /// A map of named child nodes.
-    Table(BTreeMap<String, ConfigNode>),
-    /// An ordered list of child nodes.
-    Array(Vec<ConfigNode>),
-    /// A leaf value stored as a string.
-    Scalar(String),
-    /// Absence of a value.
-    Null,
+pub struct ConfigNode {
+    pub(crate) value: Value,
+    pub(crate) origin: Option<Origin>,
 }
 
+const _: () = assert!(size_of::<ConfigNode>() == 56);
+
+/// The payload of a [`ConfigNode`].
+///
+/// Scalars stay text; the target type parses them.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum Value {
+    /// Absence of a value.
+    Null,
+    /// A leaf value stored as text.
+    Scalar(String),
+    /// An ordered list of child nodes.
+    Array(Vec<ConfigNode>),
+    /// A map of named child nodes.
+    Table(Table),
+}
+
+const _: () = assert!(size_of::<Value>() == 32);
+
 impl ConfigNode {
-    /// Create an empty table node.
-    pub fn empty_table() -> Self {
-        ConfigNode::Table(BTreeMap::new())
+    /// Wrap `value` in a node without an origin.
+    pub fn new(value: Value) -> Self {
+        Self { value, origin: None }
     }
 
-    /// Returns a reference to the underlying map when the node is a table.
-    pub fn as_table(&self) -> Option<&BTreeMap<String, ConfigNode>> {
-        match self {
-            ConfigNode::Table(map) => Some(map),
+    /// A node holding [`Value::Null`].
+    pub fn null() -> Self {
+        Self::new(Value::Null)
+    }
+
+    /// A node holding [`Value::Scalar`].
+    pub fn scalar(s: impl Into<String>) -> Self {
+        Self::new(Value::Scalar(s.into()))
+    }
+
+    /// A node holding [`Value::Array`].
+    pub fn array(items: Vec<ConfigNode>) -> Self {
+        Self::new(Value::Array(items))
+    }
+
+    /// A node holding [`Value::Table`].
+    pub fn table(t: Table) -> Self {
+        Self::new(Value::Table(t))
+    }
+
+    /// Attach the place this node came from.
+    #[must_use]
+    pub fn with_origin(mut self, origin: Origin) -> Self {
+        self.origin = Some(origin);
+        self
+    }
+
+    /// The payload.
+    pub fn value(&self) -> &Value {
+        &self.value
+    }
+
+    /// Consume the node and return its payload.
+    pub fn into_value(self) -> Value {
+        self.value
+    }
+
+    /// Where this node came from, when known.
+    pub fn origin(&self) -> Option<&Origin> {
+        self.origin.as_ref()
+    }
+
+    /// The text of a scalar node.
+    pub fn as_str(&self) -> Option<&str> {
+        match &self.value {
+            Value::Scalar(text) => Some(text),
             _ => None,
         }
     }
 
-    /// Returns a mutable copy of the table content.
-    pub fn to_owned_table(&self) -> Result<BTreeMap<String, ConfigNode>, ConfigError> {
-        match self {
-            ConfigNode::Table(map) => Ok(map.clone()),
-            _ => Err(ConfigError::mismatch("root", "table", self.to_string())),
+    /// The entries of a table node.
+    pub fn as_table(&self) -> Option<&Table> {
+        match &self.value {
+            Value::Table(table) => Some(table),
+            _ => None,
         }
     }
 
-    /// Returns a textual identifier for the type of the node.
+    /// The items of an array node.
+    pub fn as_array(&self) -> Option<&[ConfigNode]> {
+        match &self.value {
+            Value::Array(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    /// Whether the node holds [`Value::Null`].
+    pub fn is_null(&self) -> bool {
+        matches!(self.value, Value::Null)
+    }
+
+    /// Table lookup; `None` for missing keys and non-table nodes.
+    pub fn get(&self, key: &str) -> Option<&ConfigNode> {
+        self.as_table()?.get(key)
+    }
+
+    /// Textual identifier of the payload kind: `"null"`, `"scalar"`, `"array"`
+    /// or `"table"`.
     pub fn kind(&self) -> &'static str {
-        match self {
-            ConfigNode::Table(_) => "table",
-            ConfigNode::Array(_) => "array",
-            ConfigNode::Scalar(_) => "scalar",
-            ConfigNode::Null => "null",
+        match self.value {
+            Value::Null => "null",
+            Value::Scalar(_) => "scalar",
+            Value::Array(_) => "array",
+            Value::Table(_) => "table",
         }
-    }
-}
-
-impl Display for ConfigNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ConfigNode::Scalar(value) => write!(f, "{value}"),
-            ConfigNode::Null => write!(f, "null"),
-            ConfigNode::Array(items) => {
-                let mut first = true;
-                write!(f, "[")?;
-                for item in items {
-                    if !first {
-                        write!(f, ", ")?;
-                    }
-                    first = false;
-                    write!(f, "{item}")?;
-                }
-                write!(f, "]")
-            },
-            ConfigNode::Table(map) => {
-                let mut first = true;
-                write!(f, "{{")?;
-                for (k, v) in map {
-                    if !first {
-                        write!(f, ", ")?;
-                    }
-                    first = false;
-                    write!(f, "{k}: {v}")?;
-                }
-                write!(f, "}}")
-            },
-        }
-    }
-}
-
-/// Trait implemented by types that can be created from a [`ConfigNode`].
-pub trait FromNode: Sized {
-    /// Convert `node` into `Self`, using `key` as the field name in error
-    /// messages.
-    fn from_node(node: &ConfigNode, key: &str) -> Result<Self, ConfigError>;
-}
-
-impl FromNode for ConfigNode {
-    fn from_node(node: &ConfigNode, _key: &str) -> Result<Self, ConfigError> {
-        Ok(node.clone())
-    }
-}
-
-impl FromNode for String {
-    fn from_node(node: &ConfigNode, key: &str) -> Result<Self, ConfigError> {
-        match node {
-            ConfigNode::Scalar(value) => Ok(value.clone()),
-            ConfigNode::Null => Err(ConfigError::missing(key)),
-            other => Err(ConfigError::mismatch(key, "string", other.kind())),
-        }
-    }
-}
-
-impl FromNode for bool {
-    fn from_node(node: &ConfigNode, key: &str) -> Result<Self, ConfigError> {
-        parse_scalar(node, key)
-    }
-}
-
-macro_rules! impl_numeric_node {
-    ($($ty:ty),* $(,)?) => {
-        $(
-            impl FromNode for $ty {
-                fn from_node(node: &ConfigNode, key: &str) -> Result<Self, ConfigError> {
-                    parse_scalar(node, key)
-                }
-            }
-        )*
-    };
-}
-
-impl_numeric_node!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64);
-
-impl FromNode for char {
-    fn from_node(node: &ConfigNode, key: &str) -> Result<Self, ConfigError> {
-        let string = String::from_node(node, key)?;
-        let mut chars = string.chars();
-        match (chars.next(), chars.next()) {
-            (Some(ch), None) => Ok(ch),
-            _ => Err(ConfigError::mismatch(key, "character", string)),
-        }
-    }
-}
-
-impl<T> FromNode for Vec<T>
-where
-    T: FromNode,
-{
-    fn from_node(node: &ConfigNode, key: &str) -> Result<Self, ConfigError> {
-        match node {
-            ConfigNode::Array(items) => items
-                .iter()
-                .enumerate()
-                .map(|(index, item)| {
-                    let nested_key = format!("{key}[{index}]");
-                    T::from_node(item, &nested_key)
-                })
-                .collect(),
-            ConfigNode::Null => Ok(Vec::new()),
-            other => Err(ConfigError::mismatch(key, "array", other.kind())),
-        }
-    }
-}
-
-impl<T> FromNode for Option<T>
-where
-    T: FromNode,
-{
-    fn from_node(node: &ConfigNode, key: &str) -> Result<Self, ConfigError> {
-        match node {
-            ConfigNode::Null => Ok(None),
-            other => T::from_node(other, key).map(Some),
-        }
-    }
-}
-
-fn parse_scalar<T>(node: &ConfigNode, key: &str) -> Result<T, ConfigError>
-where
-    T: FromStr,
-    <T as FromStr>::Err: ToString,
-{
-    match node {
-        ConfigNode::Scalar(value) => value
-            .trim()
-            .parse::<T>()
-            .map_err(|_| ConfigError::mismatch(key, type_name::<T>(), value.clone())),
-        ConfigNode::Null => Err(ConfigError::missing(key)),
-        other => Err(ConfigError::mismatch(key, type_name::<T>(), other.kind())),
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
-    fn vec_from_null_should_return_empty_vec() {
-        let node = ConfigNode::Null;
-        let parsed = Vec::<u8>::from_node(&node, "numbers").unwrap();
-        assert!(parsed.is_empty());
+    fn constructors_set_value_and_no_origin() {
+        let node = ConfigNode::scalar("8080");
+        assert_eq!(node.value(), &Value::Scalar("8080".into()));
+        assert_eq!(node.origin(), None);
+        assert!(ConfigNode::null().is_null());
     }
 
     #[test]
-    fn option_from_scalar_should_return_some_value() {
-        let node = ConfigNode::Scalar("42".into());
-        let parsed = Option::<u32>::from_node(&node, "answer").unwrap();
-        assert_eq!(parsed, Some(42));
+    fn accessors_match_variant() {
+        let mut table = Table::new();
+        table.insert("port".into(), ConfigNode::scalar("1"));
+        let node = ConfigNode::table(table);
+        assert_eq!(node.get("port").and_then(ConfigNode::as_str), Some("1"));
+        assert_eq!(node.get("other"), None);
+        assert_eq!(node.as_str(), None);
+        let array = ConfigNode::array(vec![ConfigNode::null()]);
+        assert_eq!(array.as_array().map(<[_]>::len), Some(1));
+        assert_eq!(array.get("x"), None);
     }
 
     #[test]
-    fn string_from_null_should_return_missing_error() {
-        let node = ConfigNode::Null;
-        let err = String::from_node(&node, "name").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::MissingValue { ref field, .. } if field == "name"
-        ));
+    fn kind_names_each_variant() {
+        assert_eq!(ConfigNode::null().kind(), "null");
+        assert_eq!(ConfigNode::scalar("a").kind(), "scalar");
+        assert_eq!(ConfigNode::array(Vec::new()).kind(), "array");
+        assert_eq!(ConfigNode::table(Table::new()).kind(), "table");
     }
 
     #[test]
-    fn to_owned_table_from_scalar_should_return_type_mismatch() {
-        let node = ConfigNode::Scalar("value".into());
-        let err = node.to_owned_table().unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch {
-                field,
-                expected,
-                found,
-                ..
-            } if field == "root" && expected == "table" && found == "value"
-        ));
-    }
-
-    #[test]
-    fn bool_from_scalar_should_parse_true() {
-        let node = ConfigNode::Scalar("true".into());
-        let parsed = bool::from_node(&node, "flag").unwrap();
-        assert!(parsed);
-    }
-
-    #[test]
-    fn numeric_from_invalid_scalar_should_return_type_mismatch() {
-        let node = ConfigNode::Scalar("not-a-number".into());
-        let err = u16::from_node(&node, "size").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch {
-                field,
-                expected,
-                ..
-            } if field == "size" && expected.contains("u16")
-        ));
-    }
-
-    #[test]
-    fn char_from_multi_char_string_should_return_type_mismatch() {
-        let node = ConfigNode::Scalar("abc".into());
-        let err = char::from_node(&node, "initial").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch { field, expected, .. }
-                if field == "initial" && expected == "character"
-        ));
-    }
-
-    #[test]
-    fn vec_from_scalar_should_return_type_mismatch() {
-        let node = ConfigNode::Scalar("nope".into());
-        let err = Vec::<u8>::from_node(&node, "values").unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::TypeMismatch { field, expected, .. }
-                if field == "values" && expected == "array"
-        ));
+    fn with_origin_attaches_origin() {
+        let node = ConfigNode::null().with_origin(Origin::new("a.toml", 1, 2));
+        assert_eq!(node.origin(), Some(&Origin::new("a.toml", 1, 2)));
+        assert_eq!(node.into_value(), Value::Null);
     }
 }

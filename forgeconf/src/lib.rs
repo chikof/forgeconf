@@ -16,6 +16,9 @@
 //!     database_url: String,
 //! }
 //!
+//! # #[cfg(not(feature = "toml"))]
+//! # fn main() {}
+//! #[cfg(feature = "toml")]
 //! fn main() -> Result<(), ConfigError> {
 //!     unsafe { std::env::set_var("APP_DATABASE_URL", "postgres://override"); };
 //!     let cfg = AppConfig::loader()
@@ -29,10 +32,13 @@
 extern crate self as forgeconf;
 
 mod error;
+mod format;
+mod from_node;
+mod merge;
 mod node;
-mod parser;
+mod origin;
+mod shape;
 mod source;
-#[cfg(feature = "validators")]
 pub mod validators;
 
 #[cfg(feature = "clap")]
@@ -59,22 +65,17 @@ pub trait ForgeconfClap {
     );
 }
 
-pub use error::ConfigError;
+pub use error::{ConfigError, ErrorKind, PathSegment, Warning};
 pub use forgeconf_macros::forgeconf;
-pub use node::{ConfigNode, FromNode};
-#[cfg(all(feature = "parse", feature = "json"))]
-pub use parser::parse_json;
-#[cfg(feature = "parse")]
-pub use parser::parse_str;
-#[cfg(all(feature = "parse", feature = "toml"))]
-pub use parser::parse_toml;
-#[cfg(all(feature = "parse", feature = "yaml"))]
-pub use parser::parse_yaml;
-pub use parser::{FileFormat, load_from_path};
+pub use format::{FileFormat, from_str, load_from_path, parse_str};
+pub use from_node::FromNode;
+pub use node::{ConfigNode, Table, Value};
+pub use origin::Origin;
+pub use shape::{EnumInfo, FieldInfo, Shape, StructInfo, VariantInfo};
 #[cfg(feature = "dotenv")]
 pub use source::DotenvSource;
 #[cfg(feature = "watch")]
 pub use source::WatchSource;
 #[cfg(feature = "cli")]
 pub use source::{CliArgsSource, CliArguments};
-pub use source::{ConfigBuilder, ConfigFile, ConfigSource, merge_nodes};
+pub use source::{ConfigBuilder, ConfigFile, ConfigSource};

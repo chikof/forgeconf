@@ -1,4 +1,4 @@
-#![cfg(feature = "cli")]
+#![cfg(all(feature = "cli", feature = "toml"))]
 
 use forgeconf::{CliArguments, ConfigError, forgeconf};
 

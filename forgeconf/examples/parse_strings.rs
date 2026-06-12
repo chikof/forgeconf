@@ -3,21 +3,19 @@
 //! This example demonstrates parsing configuration directly from strings
 //! rather than files, useful for testing or dynamic configuration.
 //!
-//! Run with: cargo run --example parse_strings --features parse
+//! Run with: cargo run --example parse_strings
 
-#[cfg(feature = "parse")]
 use forgeconf::forgeconf;
 
-#[cfg(feature = "parse")]
 #[derive(Debug)]
 #[forgeconf]
+#[allow(dead_code)]
 struct ApiConfig {
     endpoint: String,
     timeout: u32,
     retries: u8,
 }
 
-#[cfg(feature = "parse")]
 fn main() {
     println!("=== Parse Configuration from Strings Example ===\n");
 
@@ -83,11 +81,4 @@ retries: 3
             Err(e) => eprintln!("✗ JSON parse error: {:?}", e),
         }
     }
-}
-
-#[cfg(not(feature = "parse"))]
-fn main() {
-    eprintln!("This example requires the 'parse' feature.");
-    eprintln!("Run with: cargo run --example parse_strings --features parse");
-    std::process::exit(1);
 }

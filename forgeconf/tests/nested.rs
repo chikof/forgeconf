@@ -1,3 +1,5 @@
+#![cfg(feature = "toml")]
+
 use forgeconf::{ConfigError, forgeconf};
 
 #[forgeconf]

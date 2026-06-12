@@ -100,13 +100,13 @@ impl<S: ConfigSource + Send + Sync + 'static> ConfigSource for WatchSource<S> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use std::io::Write;
     use std::time::Duration;
 
     use tempfile::NamedTempFile;
 
     use super::*;
+    use crate::Table;
 
     struct StaticSource(ConfigNode);
 
@@ -117,9 +117,9 @@ mod tests {
     }
 
     fn node(key: &str, val: &str) -> ConfigNode {
-        let mut map = BTreeMap::new();
-        map.insert(key.to_string(), ConfigNode::Scalar(val.to_string()));
-        ConfigNode::Table(map)
+        let mut map = Table::new();
+        map.insert(key.to_string(), ConfigNode::scalar(val));
+        ConfigNode::table(map)
     }
 
     #[test]
@@ -154,7 +154,7 @@ mod tests {
             WatchSource::new(StaticSource(node("x", "1")), std::iter::empty::<&Path>()).unwrap();
         let loaded = watch.load().unwrap();
         let table = loaded.as_table().unwrap();
-        assert_eq!(table.get("x").unwrap().to_string(), "1");
+        assert_eq!(table.get("x").and_then(ConfigNode::as_str), Some("1"));
     }
 
     #[test]

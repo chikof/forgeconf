@@ -41,12 +41,12 @@ pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> 
                     .skip(1)
                     .find_map(|arg| {
                         if let Some(value) = arg.strip_prefix(concat!("--", #cli_lit, "=")) {
-                            Some(::forgeconf::ConfigNode::Scalar(value.to_string()))
+                            Some(::forgeconf::ConfigNode::scalar(value))
                         } else {
                             None
                         }
                     })
-                    .or(std::env::var(#env_lit).ok().map(::forgeconf::ConfigNode::Scalar))
+                    .or(std::env::var(#env_lit).ok().map(::forgeconf::ConfigNode::scalar))
             }
         },
         (Some(cli), None) => {
@@ -56,7 +56,7 @@ pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> 
                     .skip(1)
                     .find_map(|arg| {
                         if let Some(value) = arg.strip_prefix(concat!("--", #cli_lit, "=")) {
-                            Some(::forgeconf::ConfigNode::Scalar(value.to_string()))
+                            Some(::forgeconf::ConfigNode::scalar(value))
                         } else {
                             None
                         }
@@ -68,33 +68,29 @@ pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> 
             quote! {
                 std::env::var(#env_lit)
                     .ok()
-                    .map(::forgeconf::ConfigNode::Scalar)
+                    .map(::forgeconf::ConfigNode::scalar)
             }
         },
         (None, None) => quote! { None },
     };
 
-    let fetch_value = quote! {
-        {
-            let mut value: Option<::forgeconf::ConfigNode> = #override_expr;
-            if value.is_none() {
-                value = #lookup_expr;
-            }
-            value
-        }
+    let found = format_ident!("__forgeconf_found");
+    let convert = quote! {
+        .map_err(|__forgeconf_err| __forgeconf_err.at_key(#key_lit))?
     };
 
     let base_expr = match field_kind(field) {
         FieldKind::Optional => {
             quote! {
-                let node = #fetch_value.unwrap_or(::forgeconf::ConfigNode::Null);
-                <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
+                let __forgeconf_null = ::forgeconf::ConfigNode::null();
+                let __forgeconf_node = #found.unwrap_or(&__forgeconf_null);
+                <#ty as ::forgeconf::FromNode>::from_node(__forgeconf_node)#convert
             }
         },
         FieldKind::Default(expr) => {
             quote! {
-                if let Some(node) = #fetch_value {
-                    <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
+                if let ::core::option::Option::Some(__forgeconf_node) = #found {
+                    <#ty as ::forgeconf::FromNode>::from_node(__forgeconf_node)#convert
                 } else {
                     #expr
                 }
@@ -102,20 +98,23 @@ pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> 
         },
         FieldKind::Scalar => {
             quote! {
-                if let Some(node) = #fetch_value {
-                    <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
+                if let ::core::option::Option::Some(__forgeconf_node) = #found {
+                    <#ty as ::forgeconf::FromNode>::from_node(__forgeconf_node)#convert
                 } else {
-                    return Err(::forgeconf::ConfigError::missing(#key_lit));
+                    return ::core::result::Result::Err(
+                        ::forgeconf::ConfigError::missing()
+                            .at_key(#key_lit)
+                            .with_origin(node.origin()),
+                    );
                 }
             }
         },
         FieldKind::Nested => {
             quote! {
-                if let Some(node) = #fetch_value {
-                    <#ty as ::forgeconf::FromNode>::from_node(&node, #key_lit)?
+                if let ::core::option::Option::Some(__forgeconf_node) = #found {
+                    <#ty as ::forgeconf::FromNode>::from_node(__forgeconf_node)#convert
                 } else {
-                    let fallback = ::forgeconf::ConfigNode::Table(map.clone());
-                    <#ty as ::forgeconf::FromNode>::from_node(&fallback, #key_lit)?
+                    <#ty as ::forgeconf::FromNode>::from_node(node)#convert
                 }
             }
         },
@@ -127,6 +126,15 @@ pub(super) fn render_field_init(field: &FieldSpec, env_prefix: Option<&str>) -> 
     quote! {
         #ident: {
             #deprecated_warn
+            let __forgeconf_override: ::core::option::Option<::forgeconf::ConfigNode> =
+                #override_expr;
+            let #found: ::core::option::Option<&::forgeconf::ConfigNode> =
+                match &__forgeconf_override {
+                    ::core::option::Option::Some(__forgeconf_node) => {
+                        ::core::option::Option::Some(__forgeconf_node)
+                    },
+                    ::core::option::Option::None => #lookup_expr,
+                };
             let #value_ident = { #base_expr };
             #validator_calls
             #value_ident
@@ -172,17 +180,13 @@ fn render_deprecated_warn(field: &FieldSpec, key_lit: &LitStr) -> TokenStream {
 fn single_lookup(insensitive: bool, key_lit: &LitStr) -> TokenStream {
     if insensitive {
         quote! {
-            {
-                let target = #key_lit;
-                let actual = map
-                    .keys()
-                    .find(|candidate| candidate.eq_ignore_ascii_case(target))
-                    .cloned();
-                actual.and_then(|real| map.remove(&real))
-            }
+            table
+                .iter()
+                .find(|(candidate, _)| candidate.eq_ignore_ascii_case(#key_lit))
+                .map(|(_, value)| value)
         }
     } else {
-        quote! { map.remove(#key_lit) }
+        quote! { table.get(#key_lit) }
     }
 }
 

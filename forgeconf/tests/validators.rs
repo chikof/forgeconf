@@ -1,8 +1,4 @@
-#![cfg(feature = "validators")]
-
-use std::collections::BTreeMap;
-
-use forgeconf::{ConfigError, ConfigNode, forgeconf};
+use forgeconf::{ConfigError, ConfigNode, Table, forgeconf};
 
 #[derive(Debug)]
 #[forgeconf]
@@ -29,26 +25,26 @@ fn host_is_https(value: &str, key: &str) -> Result<(), ConfigError> {
     if value.starts_with("https://") {
         Ok(())
     } else {
-        Err(ConfigError::mismatch(key, "https url", value))
+        Err(ConfigError::mismatch("https url", value).at_key(key))
     }
+}
+
+fn node(port: &str, endpoint: &str, log_level: &str, tags: &[&str]) -> ConfigNode {
+    let mut map = Table::new();
+    map.insert("port".into(), ConfigNode::scalar(port));
+    map.insert("endpoint".into(), ConfigNode::scalar(endpoint));
+    map.insert("log_level".into(), ConfigNode::scalar(log_level));
+    map.insert(
+        "tags".into(),
+        ConfigNode::array(tags.iter().map(|tag| ConfigNode::scalar(*tag)).collect()),
+    );
+    ConfigNode::table(map)
 }
 
 #[test]
 fn validators_accept_valid_values() -> Result<(), ConfigError> {
-    let mut map = BTreeMap::new();
-    map.insert("port".into(), ConfigNode::Scalar("1500".into()));
-    map.insert("endpoint".into(), ConfigNode::Scalar("https://example.com".into()));
-    map.insert("log_level".into(), ConfigNode::Scalar("info".into()));
-    map.insert(
-        "tags".into(),
-        ConfigNode::Array(vec![
-            ConfigNode::Scalar("api".into()),
-            ConfigNode::Scalar("prod".into()),
-        ]),
-    );
-
-    let node = ConfigNode::Table(map);
-    let cfg = ValidatorConfig::load_from(&node)?;
+    let cfg =
+        ValidatorConfig::load_from(&node("1500", "https://example.com", "info", &["api", "prod"]))?;
     assert_eq!(cfg.port, 1500);
     assert_eq!(cfg.endpoint, "https://example.com");
     assert_eq!(cfg.log_level, "info");
@@ -58,71 +54,28 @@ fn validators_accept_valid_values() -> Result<(), ConfigError> {
 
 #[test]
 fn range_validator_fails() {
-    let mut map = BTreeMap::new();
-    map.insert("port".into(), ConfigNode::Scalar("9000".into()));
-    map.insert("endpoint".into(), ConfigNode::Scalar("https://example.com".into()));
-    map.insert("log_level".into(), ConfigNode::Scalar("info".into()));
-    map.insert(
-        "tags".into(),
-        ConfigNode::Array(vec![
-            ConfigNode::Scalar("api".into()),
-            ConfigNode::Scalar("prod".into()),
-        ]),
-    );
-
-    let node = ConfigNode::Table(map);
+    let node = node("9000", "https://example.com", "info", &["api", "prod"]);
     let err = ValidatorConfig::load_from(&node).unwrap_err();
-    assert!(matches!(
-        err,
-        ConfigError::TypeMismatch { field, expected, found, .. }
-            if field == "port" && expected == "between 1000 and 2000" && found == "9000"
-    ));
+    assert_eq!(err.to_string(), "port: expected between 1000 and 2000, found \"9000\"");
+}
+
+#[test]
+fn custom_validator_fails() {
+    let node = node("1500", "http://example.com", "info", &["api"]);
+    let err = ValidatorConfig::load_from(&node).unwrap_err();
+    assert_eq!(err.to_string(), "endpoint: expected https url, found \"http://example.com\"");
 }
 
 #[test]
 fn one_of_validator_reports_error() {
-    let mut map = BTreeMap::new();
-    map.insert("port".into(), ConfigNode::Scalar("1500".into()));
-    map.insert("endpoint".into(), ConfigNode::Scalar("https://example.com".into()));
-    map.insert("log_level".into(), ConfigNode::Scalar("trace".into()));
-    map.insert(
-        "tags".into(),
-        ConfigNode::Array(vec![
-            ConfigNode::Scalar("api".into()),
-            ConfigNode::Scalar("prod".into()),
-        ]),
-    );
-
-    let node = ConfigNode::Table(map);
+    let node = node("1500", "https://example.com", "trace", &["api", "prod"]);
     let err = ValidatorConfig::load_from(&node).unwrap_err();
-    assert!(matches!(
-        err,
-        ConfigError::TypeMismatch { field, expected, found, .. }
-            if field == "log_level" && expected.contains("debug") && found == "trace"
-    ));
+    assert_eq!(err.to_string(), "log_level: expected one of [debug, info, warn], found \"trace\"");
 }
 
 #[test]
 fn len_range_validator_rejects_long_collection() {
-    let mut map = BTreeMap::new();
-    map.insert("port".into(), ConfigNode::Scalar("1500".into()));
-    map.insert("endpoint".into(), ConfigNode::Scalar("https://example.com".into()));
-    map.insert("log_level".into(), ConfigNode::Scalar("debug".into()));
-    map.insert(
-        "tags".into(),
-        ConfigNode::Array(vec![
-            ConfigNode::Scalar("api".into()),
-            ConfigNode::Scalar("prod".into()),
-            ConfigNode::Scalar("edge".into()),
-            ConfigNode::Scalar("overflow".into()),
-        ]),
-    );
-
-    let node = ConfigNode::Table(map);
+    let node = node("1500", "https://example.com", "debug", &["api", "prod", "edge", "overflow"]);
     let err = ValidatorConfig::load_from(&node).unwrap_err();
-    assert!(matches!(
-        err,
-        ConfigError::TypeMismatch { field, expected, .. }
-            if field == "tags" && expected.contains("length between")
-    ));
+    assert_eq!(err.to_string(), "tags: expected length between 1 and 3, found \"length 4\"");
 }

@@ -1,8 +1,7 @@
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::ConfigSource;
-use crate::{ConfigError, ConfigNode};
+use crate::{ConfigError, ConfigNode, ErrorKind, Table};
 
 /// Source that reads a `.env` file and injects key-value pairs into the
 /// configuration tree.
@@ -58,20 +57,20 @@ impl ConfigSource for DotenvSource {
         let content = match std::fs::read_to_string(&self.path) {
             Ok(s) => s,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound && !self.required => {
-                return Ok(ConfigNode::empty_table());
+                return Ok(ConfigNode::table(Table::new()));
             },
-            Err(e) => {
-                return Err(ConfigError::Io(e));
+            Err(source) => {
+                return Err(ConfigError::new(ErrorKind::Io { path: self.path.clone(), source }));
             },
         };
 
-        let mut map = BTreeMap::new();
+        let mut map = Table::new();
         for (raw_key, value) in parse_dotenv(&content) {
             let key = if self.lowercase { raw_key.to_lowercase() } else { raw_key };
-            map.insert(key, ConfigNode::Scalar(value));
+            map.insert(key, ConfigNode::scalar(value));
         }
 
-        Ok(ConfigNode::Table(map))
+        Ok(ConfigNode::table(map))
     }
 }
 

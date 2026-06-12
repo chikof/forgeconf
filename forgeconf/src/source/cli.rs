@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::env;
 
 use super::ConfigSource;
-use crate::{ConfigError, ConfigNode};
+use crate::{ConfigError, ConfigNode, Table, Value};
 
 /// A `ConfigSource` backed by a pre-parsed flat map of ke -> value strings.
 ///
@@ -37,11 +37,11 @@ impl ConfigSource for CliArgsSource {
     }
 
     fn load(&self) -> Result<ConfigNode, ConfigError> {
-        let mut tree = BTreeMap::new();
+        let mut tree = Table::new();
         for (key, value) in &self.args {
             insert_path(&mut tree, key, value);
         }
-        Ok(ConfigNode::Table(tree))
+        Ok(ConfigNode::table(tree))
     }
 }
 
@@ -88,14 +88,14 @@ impl ConfigSource for CliArguments {
     }
 
     fn load(&self) -> Result<ConfigNode, ConfigError> {
-        let mut tree = BTreeMap::new();
+        let mut tree = Table::new();
         for arg in self.args() {
             if let Some((key, value)) = parse_flag(&arg) {
                 insert_path(&mut tree, key, value);
             }
         }
 
-        Ok(ConfigNode::Table(tree))
+        Ok(ConfigNode::table(tree))
     }
 }
 
@@ -108,7 +108,7 @@ fn parse_flag(arg: &str) -> Option<(&str, &str)> {
     if key.is_empty() { None } else { Some((key, value)) }
 }
 
-fn insert_path(tree: &mut BTreeMap<String, ConfigNode>, path: &str, value: &str) {
+fn insert_path(tree: &mut Table, path: &str, value: &str) {
     let segments: Vec<&str> = path
         .split('.')
         .filter(|segment| !segment.is_empty())
@@ -121,27 +121,27 @@ fn insert_path(tree: &mut BTreeMap<String, ConfigNode>, path: &str, value: &str)
     insert_segments(tree, &segments, value);
 }
 
-fn insert_segments(tree: &mut BTreeMap<String, ConfigNode>, segments: &[&str], value: &str) {
+fn insert_segments(tree: &mut Table, segments: &[&str], value: &str) {
     if let Some((head, tail)) = segments.split_first() {
         if tail.is_empty() {
-            tree.insert((*head).to_string(), ConfigNode::Scalar(value.to_owned()));
+            tree.insert((*head).to_string(), ConfigNode::scalar(value));
         } else {
             let branch = tree
                 .entry((*head).to_string())
-                .or_insert_with(ConfigNode::empty_table);
+                .or_insert_with(|| ConfigNode::table(Table::new()));
             let map = as_table(branch);
             insert_segments(map, tail, value);
         }
     }
 }
 
-fn as_table(node: &mut ConfigNode) -> &mut BTreeMap<String, ConfigNode> {
-    if !matches!(node, ConfigNode::Table(_)) {
-        *node = ConfigNode::empty_table();
+fn as_table(node: &mut ConfigNode) -> &mut Table {
+    if !matches!(node.value, Value::Table(_)) {
+        *node = ConfigNode::table(Table::new());
     }
 
-    match node {
-        ConfigNode::Table(map) => map,
+    match &mut node.value {
+        Value::Table(map) => map,
         _ => unreachable!("ensured above"),
     }
 }
@@ -155,7 +155,7 @@ mod tests {
 
         #[test]
         fn should_insert_string_value_under_nested_key() {
-            let mut tree = BTreeMap::new();
+            let mut tree = Table::new();
             insert_path(&mut tree, "db.host", "localhost");
 
             let host = tree
@@ -165,13 +165,14 @@ mod tests {
                 .unwrap()
                 .get("host")
                 .unwrap()
-                .to_string();
+                .as_str()
+                .unwrap();
             assert_eq!(host, "localhost");
         }
 
         #[test]
         fn should_insert_second_value_into_existing_nested_table() {
-            let mut tree = BTreeMap::new();
+            let mut tree = Table::new();
             insert_path(&mut tree, "db.host", "localhost");
             insert_path(&mut tree, "db.port", "5432");
 
@@ -182,7 +183,8 @@ mod tests {
                 .unwrap()
                 .get("port")
                 .unwrap()
-                .to_string();
+                .as_str()
+                .unwrap();
             assert_eq!(port, "5432");
         }
     }
@@ -203,7 +205,8 @@ mod tests {
                 .unwrap()
                 .get("port")
                 .unwrap()
-                .to_string();
+                .as_str()
+                .unwrap();
             assert_eq!(port, "9000");
         }
     }

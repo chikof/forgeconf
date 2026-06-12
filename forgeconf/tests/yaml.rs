@@ -1,3 +1,5 @@
+#![cfg(feature = "yaml")]
+
 use forgeconf::{ConfigError, forgeconf};
 
 #[forgeconf]
