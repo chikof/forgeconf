@@ -69,23 +69,31 @@ pub fn load_from_path(
     };
     let contents = std::fs::read_to_string(path)
         .map_err(|source| ConfigError::new(ErrorKind::Io { path: path.to_path_buf(), source }))?;
-    parse_str(&contents, format)
+    parse_source(&contents, format, &path.display().to_string())
 }
 
-/// Parse an in-memory string.
+/// Parse an in-memory string. Origins name the source `<string>`.
+pub fn parse_str(input: &str, format: FileFormat) -> Result<ConfigNode, ConfigError> {
+    parse_source(input, format, "<string>")
+}
+
 #[cfg_attr(
     not(any(feature = "toml", feature = "json", feature = "yaml")),
     allow(unused_variables, reason = "no parser is compiled in")
 )]
-pub fn parse_str(input: &str, format: FileFormat) -> Result<ConfigNode, ConfigError> {
+pub(crate) fn parse_source(
+    input: &str,
+    format: FileFormat,
+    source: &str,
+) -> Result<ConfigNode, ConfigError> {
     // Selecting a disabled format is impossible: its variant does not exist.
     match format {
         #[cfg(feature = "toml")]
-        FileFormat::Toml => toml::parse(input),
+        FileFormat::Toml => toml::parse(input, source),
         #[cfg(feature = "json")]
-        FileFormat::Json => json::parse(input),
+        FileFormat::Json => json::parse(input, source),
         #[cfg(feature = "yaml")]
-        FileFormat::Yaml => yaml::parse(input),
+        FileFormat::Yaml => yaml::parse(input, source),
     }
 }
 

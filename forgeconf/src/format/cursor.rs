@@ -43,6 +43,26 @@ impl<'a> Cursor<'a> {
         self.src.as_bytes().get(self.pos.checked_add(n)?).copied()
     }
 
+    /// Unconsumed input.
+    pub(crate) fn rest(&self) -> &'a str {
+        self.src.get(self.pos..).unwrap_or("")
+    }
+
+    /// Byte offset of the next character.
+    pub(crate) fn pos(&self) -> usize {
+        self.pos
+    }
+
+    /// Input from byte offset `start` (a value of [`Cursor::pos`]) up to the current position.
+    pub(crate) fn slice_from(&self, start: usize) -> &'a str {
+        self.src.get(start..self.pos).unwrap_or("")
+    }
+
+    /// True when all input is consumed.
+    pub(crate) fn is_eof(&self) -> bool {
+        self.pos >= self.src.len()
+    }
+
     /// Consume and return the next character.
     pub(crate) fn bump(&mut self) -> Option<char> {
         let ch = self.src.get(self.pos..)?.chars().next()?;

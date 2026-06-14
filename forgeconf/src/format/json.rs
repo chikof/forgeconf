@@ -3,7 +3,7 @@ use jzon::JsonValue;
 use crate::{ConfigError, ConfigNode, ErrorKind, Table};
 
 /// Parse JSON content into a ConfigNode tree.
-pub fn parse(input: &str) -> Result<ConfigNode, ConfigError> {
+pub(crate) fn parse(input: &str, _source: &str) -> Result<ConfigNode, ConfigError> {
     let value = jzon::parse(input).map_err(|source| {
         ConfigError::new(ErrorKind::Syntax {
             format: "json",
@@ -42,7 +42,7 @@ mod tests {
                 "host": "localhost"
             }
         "#;
-        let node = parse(input).unwrap();
+        let node = parse(input, "<string>").unwrap();
         let table = node.as_table().unwrap();
         assert_eq!(table.get("port").unwrap().as_str(), Some("8080"));
         assert_eq!(table.get("host").unwrap().as_str(), Some("localhost"));
@@ -58,7 +58,7 @@ mod tests {
                 }
             }
         "#;
-        let node = parse(input).unwrap();
+        let node = parse(input, "<string>").unwrap();
         let table = node.as_table().unwrap();
         let db = table.get("database").unwrap().as_table().unwrap();
         assert_eq!(db.get("host").unwrap().as_str(), Some("localhost"));
@@ -72,7 +72,7 @@ mod tests {
                 "tags": ["api", "production", "v2"]
             }
         "#;
-        let node = parse(input).unwrap();
+        let node = parse(input, "<string>").unwrap();
         let table = node.as_table().unwrap();
         let items = table.get("tags").unwrap().as_array().unwrap();
         assert_eq!(items.len(), 3);
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn handles_null_values() {
         let input = r#"{"key": null}"#;
-        let node = parse(input).unwrap();
+        let node = parse(input, "<string>").unwrap();
         let table = node.as_table().unwrap();
         assert!(table.get("key").unwrap().is_null());
     }
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn handles_boolean_values() {
         let input = r#"{"enabled": true, "debug": false}"#;
-        let node = parse(input).unwrap();
+        let node = parse(input, "<string>").unwrap();
         let table = node.as_table().unwrap();
         assert_eq!(table.get("enabled").unwrap().as_str(), Some("true"));
         assert_eq!(table.get("debug").unwrap().as_str(), Some("false"));
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn returns_error_on_invalid_json() {
         let input = r#"{"invalid": }"#;
-        let err = parse(input).unwrap_err();
+        let err = parse(input, "<string>").unwrap_err();
         assert!(matches!(err.kind(), ErrorKind::Syntax { format: "json", .. }));
     }
 }
