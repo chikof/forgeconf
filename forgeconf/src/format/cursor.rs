@@ -53,7 +53,8 @@ impl<'a> Cursor<'a> {
         self.pos
     }
 
-    /// Input from byte offset `start` (a value of [`Cursor::pos`]) up to the current position.
+    /// Input from byte offset `start` (a value of [`Cursor::pos`]) up to the
+    /// current position.
     pub(crate) fn slice_from(&self, start: usize) -> &'a str {
         self.src.get(start..self.pos).unwrap_or("")
     }
