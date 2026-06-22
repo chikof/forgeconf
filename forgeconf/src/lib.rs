@@ -31,6 +31,7 @@
 
 extern crate self as forgeconf;
 
+mod duration;
 mod error;
 mod format;
 mod from_node;

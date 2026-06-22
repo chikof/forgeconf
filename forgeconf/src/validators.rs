@@ -1,23 +1,42 @@
+//! Reusable field validators.
+//!
+//! Every function returns a closure `Fn(&T) -> Result<(), ConfigError>` that
+//! can be used in `#[field(validate = ...)]`. The error carries only the
+//! message; the caller adds the key path.
+
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 use std::hash::Hash;
+use std::ops::{Bound, RangeBounds};
 
 use crate::ConfigError;
 
-/// Trait for values whose length can be queried.
+/// Values whose length can be queried.
 pub trait HasLen {
-    fn len(&self) -> usize {
-        0
-    }
+    /// Number of elements (bytes for strings).
+    fn len(&self) -> usize;
 
+    /// `true` when [`len`](HasLen::len) is zero.
     fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+impl HasLen for str {
+    fn len(&self) -> usize {
+        str::len(self)
     }
 }
 
 impl HasLen for String {
     fn len(&self) -> usize {
         String::len(self)
+    }
+}
+
+impl<T> HasLen for [T] {
+    fn len(&self) -> usize {
+        <[T]>::len(self)
     }
 }
 
@@ -33,135 +52,82 @@ impl<T> HasLen for VecDeque<T> {
     }
 }
 
-impl<K: Ord, V> HasLen for BTreeMap<K, V> {
+impl<K, V> HasLen for BTreeMap<K, V> {
     fn len(&self) -> usize {
         BTreeMap::len(self)
     }
 }
 
-impl<K: Ord> HasLen for BTreeSet<K> {
-    fn len(&self) -> usize {
-        BTreeSet::len(self)
-    }
-}
-
-impl<K: Eq + Hash, V> HasLen for HashMap<K, V> {
+impl<K, V> HasLen for HashMap<K, V> {
     fn len(&self) -> usize {
         HashMap::len(self)
     }
 }
 
-impl<K: Eq + Hash> HasLen for HashSet<K> {
+impl<T> HasLen for BTreeSet<T> {
+    fn len(&self) -> usize {
+        BTreeSet::len(self)
+    }
+}
+
+impl<T: Eq + Hash> HasLen for HashSet<T> {
     fn len(&self) -> usize {
         HashSet::len(self)
     }
 }
 
-/// Ensure that a collection-like value is not empty.
-pub fn non_empty<T>() -> impl Fn(&T, &str) -> Result<(), ConfigError>
-where
-    T: HasLen,
-{
-    |value, key| {
-        if value.len() == 0 {
-            Err(ConfigError::mismatch("non-empty value", "empty value").at_key(key))
-        } else {
-            Ok(())
-        }
+/// Reject empty strings and collections.
+pub fn non_empty<T: HasLen + ?Sized>() -> impl Fn(&T) -> Result<(), ConfigError> {
+    |value| {
+        if value.is_empty() { Err(ConfigError::invalid("must not be empty")) } else { Ok(()) }
     }
 }
 
-/// Ensure the value length is at least `min`.
-pub fn min_len<T>(min: usize) -> impl Fn(&T, &str) -> Result<(), ConfigError>
-where
-    T: HasLen,
-{
-    move |value, key| {
-        let len = value.len();
-        if len < min {
-            Err(ConfigError::mismatch(format!("length >= {min}"), format!("length {len}"))
-                .at_key(key))
-        } else {
-            Ok(())
-        }
+/// Require the length to fall inside `range`.
+pub fn len<T: HasLen + ?Sized>(
+    range: impl RangeBounds<usize>,
+) -> impl Fn(&T) -> Result<(), ConfigError> {
+    let bounds = (range.start_bound().cloned(), range.end_bound().cloned());
+    let message = format!("length must be {}", describe(&bounds));
+    move |value| {
+        if bounds.contains(&value.len()) { Ok(()) } else { Err(ConfigError::invalid(&message)) }
     }
 }
 
-/// Ensure the value length does not exceed `max`.
-pub fn max_len<T>(max: usize) -> impl Fn(&T, &str) -> Result<(), ConfigError>
-where
-    T: HasLen,
-{
-    move |value, key| {
-        let len = value.len();
-        if len > max {
-            Err(ConfigError::mismatch(format!("length <= {max}"), format!("length {len}"))
-                .at_key(key))
-        } else {
-            Ok(())
-        }
+/// Require the value to fall inside `range`.
+pub fn range<T: PartialOrd + Display + Clone>(
+    range: impl RangeBounds<T>,
+) -> impl Fn(&T) -> Result<(), ConfigError> {
+    let bounds = (range.start_bound().cloned(), range.end_bound().cloned());
+    let message = format!("must be {}", describe(&bounds));
+    move |value| {
+        if bounds.contains(value) { Ok(()) } else { Err(ConfigError::invalid(&message)) }
     }
 }
 
-/// Ensure the value length falls within the provided range.
-pub fn len_range<T>(min: usize, max: usize) -> impl Fn(&T, &str) -> Result<(), ConfigError>
-where
-    T: HasLen,
-{
-    assert!(min <= max, "length lower bound must be less than or equal to the upper bound");
-    move |value, key| {
-        let len = value.len();
-        if len < min || len > max {
-            Err(ConfigError::mismatch(
-                format!("length between {min} and {max}"),
-                format!("length {len}"),
-            )
-            .at_key(key))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-/// Ensure that a comparable scalar falls within the provided range.
-pub fn range<T>(min: T, max: T) -> impl Fn(&T, &str) -> Result<(), ConfigError>
-where
-    T: PartialOrd + Display + Copy,
-{
-    assert!(min <= max, "range lower bound must be less than or equal to the upper bound");
-    move |value, key| {
-        if *value < min || *value > max {
-            Err(ConfigError::mismatch(format!("between {min} and {max}"), value.to_string())
-                .at_key(key))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-/// Ensure the value is present in a pre-defined set.
-pub fn one_of<T, I>(allowed: I) -> impl Fn(&T, &str) -> Result<(), ConfigError>
-where
-    T: PartialEq + Display + Clone + 'static,
-    I: IntoIterator<Item = T>,
-{
+/// Require the value to equal one of `allowed`.
+pub fn one_of<T: PartialEq + Display>(
+    allowed: impl IntoIterator<Item = T>,
+) -> impl Fn(&T) -> Result<(), ConfigError> {
     let allowed: Vec<T> = allowed.into_iter().collect();
-    assert!(!allowed.is_empty(), "one_of requires at least one candidate value");
-    let expected = format!(
-        "one of [{}]",
-        allowed
-            .iter()
-            .map(|item| item.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
+    let list: Vec<String> = allowed.iter().map(ToString::to_string).collect();
+    let message = format!("must be one of: {}", list.join(", "));
+    move |value| {
+        if allowed.contains(value) { Ok(()) } else { Err(ConfigError::invalid(&message)) }
+    }
+}
 
-    move |value, key| {
-        if allowed.iter().any(|candidate| candidate == value) {
-            Ok(())
-        } else {
-            Err(ConfigError::mismatch(expected.clone(), value.to_string()).at_key(key))
-        }
+fn describe<T: Display>(bounds: &(Bound<T>, Bound<T>)) -> String {
+    match bounds {
+        (Bound::Included(a), Bound::Included(b)) => format!("between {a} and {b}"),
+        (Bound::Included(a), Bound::Excluded(b)) => format!("at least {a} and less than {b}"),
+        (Bound::Excluded(a), Bound::Included(b)) => format!("greater than {a} and at most {b}"),
+        (Bound::Excluded(a), Bound::Excluded(b)) => format!("greater than {a} and less than {b}"),
+        (Bound::Included(a), Bound::Unbounded) => format!("at least {a}"),
+        (Bound::Excluded(a), Bound::Unbounded) => format!("greater than {a}"),
+        (Bound::Unbounded, Bound::Included(b)) => format!("at most {b}"),
+        (Bound::Unbounded, Bound::Excluded(b)) => format!("less than {b}"),
+        (Bound::Unbounded, Bound::Unbounded) => "anything".to_owned(),
     }
 }
 
@@ -170,55 +136,78 @@ mod test {
     use super::*;
 
     #[test]
-    fn non_empty_is_rejected() {
+    fn non_empty_rejects_empty() {
         let validator = non_empty::<String>();
-        let err = validator(&String::new(), "name").unwrap_err();
-        assert_eq!(err.to_string(), "name: expected non-empty value, found \"empty value\"");
+        assert_eq!(validator(&String::new()).unwrap_err().to_string(), "must not be empty");
+        validator(&"x".to_owned()).unwrap();
+        non_empty::<[u8]>()(&[1]).unwrap();
+        assert!(non_empty::<str>()("").is_err());
     }
 
     #[test]
-    fn range_accepts_value_in_bounds() {
-        let validator = range(10_u32, 20);
-        validator(&15, "port").unwrap();
+    fn range_inclusive_message() {
+        let validator = range(1024..=65535_u16);
+        validator(&1024).unwrap();
+        validator(&65535).unwrap();
+        let err = validator(&80).unwrap_err().at_key("port");
+        assert_eq!(err.to_string(), "port: must be between 1024 and 65535");
     }
 
     #[test]
-    fn range_rejects_out_of_bounds() {
-        let validator = range(1_u8, 3_u8);
-        let err = validator(&0, "retries").unwrap_err();
-        assert_eq!(err.to_string(), "retries: expected between 1 and 3, found \"0\"");
+    fn range_open_ends() {
+        assert_eq!(range(5_u8..)(&4).unwrap_err().to_string(), "must be at least 5");
+        assert_eq!(range(..=5_u8)(&6).unwrap_err().to_string(), "must be at most 5");
+        assert_eq!(range(..5_u8)(&5).unwrap_err().to_string(), "must be less than 5");
+        assert_eq!(
+            range(1_u8..5)(&5).unwrap_err().to_string(),
+            "must be at least 1 and less than 5"
+        );
+        range(1_u8..5)(&4).unwrap();
+        range::<u8>(..)(&0).unwrap();
     }
 
     #[test]
-    fn min_len_flags_short_values() {
-        let validator = min_len::<String>(3);
-        let err = validator(&"ab".to_string(), "token").unwrap_err();
-        assert_eq!(err.to_string(), "token: expected length >= 3, found \"length 2\"");
+    fn range_exclusive_start() {
+        let validator = range((Bound::Excluded(0.0_f64), Bound::Unbounded));
+        assert_eq!(validator(&0.0).unwrap_err().to_string(), "must be greater than 0");
+        validator(&0.1).unwrap();
     }
 
     #[test]
-    fn max_len_flags_long_values() {
-        let validator = max_len::<Vec<u8>>(2);
-        let err = validator(&vec![1, 2, 3], "bytes").unwrap_err();
-        assert_eq!(err.to_string(), "bytes: expected length <= 2, found \"length 3\"");
+    #[allow(clippy::reversed_empty_ranges, reason = "the empty range is the case under test")]
+    fn empty_range_never_passes() {
+        let validator = range(5_u8..3);
+        assert!(validator(&4).is_err());
+        assert!(validator(&5).is_err());
+        assert!(validator(&3).is_err());
     }
 
     #[test]
-    fn len_range_accepts_bounds() {
-        let validator = len_range::<String>(2, 4);
-        validator(&"abcd".to_string(), "scope").unwrap();
+    fn len_messages() {
+        let both = len::<str>(2..=4);
+        both("ab").unwrap();
+        assert_eq!(both("a").unwrap_err().to_string(), "length must be between 2 and 4");
+        assert_eq!(len::<str>(3..)("ab").unwrap_err().to_string(), "length must be at least 3");
+        assert_eq!(
+            len::<[u8]>(..=2)(&[1, 2, 3]).unwrap_err().to_string(),
+            "length must be at most 2"
+        );
+        assert_eq!(
+            len::<Vec<u8>>(..2)(&vec![1, 2]).unwrap_err().to_string(),
+            "length must be less than 2"
+        );
     }
 
     #[test]
-    fn one_of_accepts_member() {
-        let validator = one_of(vec!["debug".to_string(), "info".to_string()]);
-        validator(&"info".to_string(), "level").unwrap();
+    fn one_of_messages() {
+        let validator = one_of(["debug".to_owned(), "info".to_owned()]);
+        validator(&"info".to_owned()).unwrap();
+        let err = validator(&"warn".to_owned()).unwrap_err();
+        assert_eq!(err.to_string(), "must be one of: debug, info");
     }
 
     #[test]
-    fn one_of_rejects_non_member() {
-        let validator = one_of(vec!["debug".to_string(), "info".to_string()]);
-        let err = validator(&"warn".to_string(), "level").unwrap_err();
-        assert_eq!(err.to_string(), "level: expected one of [debug, info], found \"warn\"");
+    fn one_of_empty_never_passes() {
+        assert!(one_of(Vec::<u8>::new())(&1).is_err());
     }
 }

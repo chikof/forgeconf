@@ -3,12 +3,12 @@ use forgeconf::{ConfigError, ConfigNode, Table, forgeconf};
 #[derive(Debug)]
 #[forgeconf]
 struct ValidatorConfig {
-    #[field(validate = forgeconf::validators::range(1000, 2000))]
+    #[field(validate = forgeconf::validators::range(1000..=2000))]
     port: u16,
     #[field(
         validate = host_is_https,
         validate = forgeconf::validators::non_empty(),
-        validate = forgeconf::validators::max_len(64),
+        validate = forgeconf::validators::len(..=64),
     )]
     endpoint: String,
     #[field(validate = forgeconf::validators::one_of(vec![
@@ -17,15 +17,15 @@ struct ValidatorConfig {
         "warn".to_string(),
     ]))]
     log_level: String,
-    #[field(validate = forgeconf::validators::len_range(1, 3))]
+    #[field(validate = forgeconf::validators::len(1..=3))]
     tags: Vec<String>,
 }
 
-fn host_is_https(value: &str, key: &str) -> Result<(), ConfigError> {
+fn host_is_https(value: &str) -> Result<(), ConfigError> {
     if value.starts_with("https://") {
         Ok(())
     } else {
-        Err(ConfigError::mismatch("https url", value).at_key(key))
+        Err(ConfigError::invalid("must be an https url"))
     }
 }
 
@@ -56,26 +56,26 @@ fn validators_accept_valid_values() -> Result<(), ConfigError> {
 fn range_validator_fails() {
     let node = node("9000", "https://example.com", "info", &["api", "prod"]);
     let err = ValidatorConfig::load_from(&node).unwrap_err();
-    assert_eq!(err.to_string(), "port: expected between 1000 and 2000, found \"9000\"");
+    assert_eq!(err.to_string(), "port: must be between 1000 and 2000");
 }
 
 #[test]
 fn custom_validator_fails() {
     let node = node("1500", "http://example.com", "info", &["api"]);
     let err = ValidatorConfig::load_from(&node).unwrap_err();
-    assert_eq!(err.to_string(), "endpoint: expected https url, found \"http://example.com\"");
+    assert_eq!(err.to_string(), "endpoint: must be an https url");
 }
 
 #[test]
 fn one_of_validator_reports_error() {
     let node = node("1500", "https://example.com", "trace", &["api", "prod"]);
     let err = ValidatorConfig::load_from(&node).unwrap_err();
-    assert_eq!(err.to_string(), "log_level: expected one of [debug, info, warn], found \"trace\"");
+    assert_eq!(err.to_string(), "log_level: must be one of: debug, info, warn");
 }
 
 #[test]
 fn len_range_validator_rejects_long_collection() {
     let node = node("1500", "https://example.com", "debug", &["api", "prod", "edge", "overflow"]);
     let err = ValidatorConfig::load_from(&node).unwrap_err();
-    assert_eq!(err.to_string(), "tags: expected length between 1 and 3, found \"length 4\"");
+    assert_eq!(err.to_string(), "tags: length must be between 1 and 3");
 }

@@ -200,7 +200,7 @@ fn render_validator_calls(
     }
 
     let validators = field.options.validators.iter().map(|expr| {
-        quote! { (#expr)(&#value_ident, #key_lit)?; }
+        quote! { (#expr)(&#value_ident).map_err(|e| e.at_key(#key_lit))?; }
     });
 
     quote! { #(#validators)* }

@@ -12,7 +12,7 @@ use forgeconf::forgeconf;
 #[allow(dead_code)]
 struct ServerConfig {
     /// Port must be between 1024 and 65535
-    #[field(validate = forgeconf::validators::range(1024, 65535))]
+    #[field(validate = forgeconf::validators::range(1024..=65535))]
     port: u16,
 
     /// Host cannot be empty
@@ -20,7 +20,7 @@ struct ServerConfig {
     host: String,
 
     /// Workers must be at least 1
-    #[field(validate = forgeconf::validators::range(1, 100))]
+    #[field(validate = forgeconf::validators::range(1..=100))]
     workers: u8,
 
     /// Log level must be one of: debug, info, warn, error
@@ -33,11 +33,11 @@ struct ServerConfig {
     log_level: String,
 
     /// API key must be at least 32 characters
-    #[field(validate = forgeconf::validators::min_len(32))]
+    #[field(validate = forgeconf::validators::len(32..))]
     api_key: String,
 
     /// Optional tags list (max 10 items)
-    #[field(validate = forgeconf::validators::max_len(10))]
+    #[field(validate = forgeconf::validators::len(..=10))]
     tags: Vec<String>,
 }
 
