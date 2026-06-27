@@ -14,7 +14,7 @@ repository = "https://github.com/chikof/forgeconf"
 default = ["toml", "yaml", "cli"]
 dotenv = []
 watch = ["dep:notify"]
-toml = ["dep:toml"]
+toml = []
 yaml = []
 json = []
 cli = []
@@ -23,7 +23,6 @@ clap = ["forgeconf_macros/clap", "cli", "dep:clap"]
 [dependencies]
 forgeconf_macros = { version = "=0.5.0", path = "../forgeconf_macros" }
 clap = { version = "4", optional = true, features = ["derive"] }
-toml = { version = "1.1.2", optional = true }
 notify = { version = "9.0.0-rc.4", optional = true }
 
 [dev-dependencies]
