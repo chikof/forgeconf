@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::{ConfigError, ConfigNode, ErrorKind, FromNode};
 
-#[allow(dead_code, reason = "used by in-house parsers from Phase 3")]
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 mod cursor;
 #[cfg(feature = "json")]
 mod json;

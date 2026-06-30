@@ -55,11 +55,13 @@ impl<'a> Cursor<'a> {
 
     /// Input from byte offset `start` (a value of [`Cursor::pos`]) up to the
     /// current position.
+    #[cfg(any(feature = "toml", feature = "json"))]
     pub(crate) fn slice_from(&self, start: usize) -> &'a str {
         self.src.get(start..self.pos).unwrap_or("")
     }
 
     /// True when all input is consumed.
+    #[cfg(any(feature = "toml", feature = "json"))]
     pub(crate) fn is_eof(&self) -> bool {
         self.pos >= self.src.len()
     }
