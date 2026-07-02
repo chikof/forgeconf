@@ -1,78 +1,77 @@
-//! Multiple format support example.
+//! Multiple formats, from files and from strings.
 //!
-//! This example demonstrates loading configuration from different file formats
-//! (TOML, YAML, JSON) using the same struct.
+//! The same struct loads from TOML, YAML and JSON. Files pick the format from
+//! their extension; strings name it with `FileFormat`. Only the formats whose
+//! Cargo feature is on are compiled in.
 //!
 //! Run with: cargo run --example multiple_formats --all-features
+#![cfg_attr(
+    not(any(feature = "toml", feature = "yaml", feature = "json")),
+    allow(dead_code, unused_imports)
+)]
 
-#[cfg(any(feature = "toml", feature = "yaml", feature = "json"))]
-use std::fs;
+use forgeconf::{Config, ConfigError, ConfigFile, FileFormat};
 
-use forgeconf::forgeconf;
-
-#[derive(Debug)]
-#[forgeconf]
-#[allow(dead_code)]
-struct Config {
+#[derive(Debug, Config)]
+struct Package {
     name: String,
     version: String,
     enabled: bool,
 }
 
+#[derive(Debug, Config)]
+struct Api {
+    endpoint: String,
+    timeout: u32,
+    #[config(default = 3)]
+    retries: u8,
+}
+
+fn load_file(path: &str) -> Result<Package, ConfigError> {
+    Package::loader().file(ConfigFile::new(path)).load()
+}
+
+fn show_file(label: &str, result: Result<Package, ConfigError>) {
+    match result {
+        Ok(p) => println!("{label}: {} v{} (enabled: {})", p.name, p.version, p.enabled),
+        Err(error) => println!("{label} failed: {error}"),
+    }
+}
+
+fn show_string(label: &str, input: &str, format: FileFormat) {
+    match forgeconf::from_str::<Api>(input, format) {
+        Ok(api) => {
+            println!("{label}: {} timeout={}s retries={}", api.endpoint, api.timeout, api.retries)
+        },
+        Err(error) => println!("{label} failed: {error}"),
+    }
+}
+
 fn main() {
-    println!("=== Multiple Format Support Example ===\n");
-
-    // Load from TOML
+    println!("From files:");
     #[cfg(feature = "toml")]
-    {
-        println!("Loading from TOML...");
-        let toml_content =
-            fs::read_to_string("examples/fixtures/format.toml").expect("Failed to read TOML file");
-
-        match Config::parse_toml(&toml_content) {
-            Ok(config) => {
-                println!(
-                    "✓ TOML: {} v{} (enabled: {})",
-                    config.name, config.version, config.enabled
-                );
-            },
-            Err(e) => println!("✗ TOML loading failed: {:?}", e),
-        }
-    }
-
-    // Load from YAML
+    show_file("toml", load_file("examples/fixtures/format.toml"));
     #[cfg(feature = "yaml")]
-    {
-        println!("\nLoading from YAML...");
-        let yaml_content =
-            fs::read_to_string("examples/fixtures/format.yaml").expect("Failed to read YAML file");
-
-        match Config::parse_yaml(&yaml_content) {
-            Ok(config) => {
-                println!(
-                    "✓ YAML: {} v{} (enabled: {})",
-                    config.name, config.version, config.enabled
-                );
-            },
-            Err(e) => println!("✗ YAML loading failed: {:?}", e),
-        }
-    }
-
-    // Load from JSON
+    show_file("yaml", load_file("examples/fixtures/format.yaml"));
     #[cfg(feature = "json")]
-    {
-        println!("\nLoading from JSON...");
-        let json_content =
-            fs::read_to_string("examples/fixtures/format.json").expect("Failed to read JSON file");
+    show_file("json", load_file("examples/fixtures/format.json"));
 
-        match Config::parse_json(&json_content) {
-            Ok(config) => {
-                println!(
-                    "✓ JSON: {} v{} (enabled: {})",
-                    config.name, config.version, config.enabled
-                );
-            },
-            Err(e) => println!("✗ JSON loading failed: {:?}", e),
-        }
-    }
+    println!("\nFrom strings:");
+    #[cfg(feature = "toml")]
+    show_string("toml", "endpoint = \"https://api.example.com\"\ntimeout = 30\n", FileFormat::Toml);
+    #[cfg(feature = "yaml")]
+    show_string(
+        "yaml",
+        "endpoint: https://api.example.com\ntimeout: 30\nretries: 5\n",
+        FileFormat::Yaml,
+    );
+    #[cfg(feature = "json")]
+    show_string(
+        "json",
+        r#"{"endpoint": "https://api.example.com", "timeout": 30, "retries": 1}"#,
+        FileFormat::Json,
+    );
+
+    #[cfg(not(any(feature = "toml", feature = "yaml", feature = "json")))]
+    eprintln!("this example needs the `toml`, `yaml` or `json` feature");
 }

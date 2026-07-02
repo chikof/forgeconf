@@ -205,6 +205,18 @@ impl ConfigError {
         self
     }
 
+    /// Move every leaf error into `out`, flattening nested `Multiple`.
+    pub(crate) fn into_leaves(mut self, out: &mut Vec<ConfigError>) {
+        match &mut self.0.kind {
+            ErrorKind::Multiple(children) => {
+                for child in std::mem::take(children) {
+                    child.into_leaves(out);
+                }
+            },
+            _ => out.push(self),
+        }
+    }
+
     fn flatten_into<'a>(&'a self, out: &mut Vec<&'a ConfigError>) {
         match &self.0.kind {
             ErrorKind::Multiple(children) => {
@@ -310,7 +322,6 @@ pub struct Warning {
 }
 
 impl Warning {
-    #[allow(dead_code, reason = "constructed by the loader from Phase 5")]
     pub(crate) fn new(
         path: impl Into<String>,
         message: impl Into<String>,

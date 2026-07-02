@@ -55,20 +55,21 @@ impl FileFormat {
     }
 }
 
-/// Read and parse a configuration file into a [`ConfigNode`].
-///
-/// The format is `explicit` when given, otherwise inferred from the extension.
-pub fn load_from_path(
+// Read and parse a file; the format is `explicit` when given, otherwise
+// inferred from the extension.
+pub(crate) fn load_from_path(
     path: impl AsRef<Path>,
     explicit: Option<FileFormat>,
 ) -> Result<ConfigNode, ConfigError> {
     let path = path.as_ref();
+    // Read first: a missing file is an Io error (or an empty optional file),
+    // whatever its extension.
+    let contents = std::fs::read_to_string(path)
+        .map_err(|source| ConfigError::new(ErrorKind::Io { path: path.to_path_buf(), source }))?;
     let format = match explicit {
         Some(format) => format,
         None => infer_from_extension(path)?,
     };
-    let contents = std::fs::read_to_string(path)
-        .map_err(|source| ConfigError::new(ErrorKind::Io { path: path.to_path_buf(), source }))?;
     parse_source(&contents, format, &path.display().to_string())
 }
 

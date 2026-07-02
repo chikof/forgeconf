@@ -11,19 +11,16 @@ readme = "../README.md"
 repository = "https://github.com/chikof/forgeconf"
 
 [features]
-default = ["toml", "yaml", "cli"]
+default = ["toml", "cli"]
 dotenv = []
-watch = ["dep:notify"]
+watch = []
 toml = []
 yaml = []
 json = []
 cli = []
-clap = ["forgeconf_macros/clap", "cli", "dep:clap"]
 
 [dependencies]
 forgeconf_macros = { version = "=0.5.0", path = "../forgeconf_macros" }
-clap = { version = "4", optional = true, features = ["derive"] }
-notify = { version = "9.0.0-rc.4", optional = true }
 
 [dev-dependencies]
 tempfile = "3.27.0"
