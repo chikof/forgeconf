@@ -6,6 +6,8 @@ use crate::{ConfigError, ConfigNode};
 #[allow(dead_code, reason = "used by Loader::dotenv in Phase 6")]
 pub(crate) mod dotenv;
 mod file;
+#[allow(dead_code, reason = "consumed by the environment and CLI sources (Phases 6 and 7)")]
+pub(crate) mod walk;
 
 pub use file::ConfigFile;
 
