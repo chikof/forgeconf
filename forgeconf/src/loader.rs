@@ -1,8 +1,12 @@
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::marker::PhantomData;
+#[cfg(feature = "dotenv")]
+use std::path::{Path, PathBuf};
 
 use crate::__private::collect_deprecations;
 use crate::merge::merge;
+use crate::source::env::env_node;
 use crate::{ConfigError, ConfigFile, ConfigNode, ConfigSource, FromNode, Table, Warning};
 
 /// A type that knows how to build its own [`Loader`].
@@ -25,17 +29,18 @@ pub trait Config: FromNode {
 /// |-------------------------------------|----------|
 /// | declared or added files ([`ConfigFile`]) | 10  |
 /// | [`source`](Loader::source) default  | 100      |
-/// | environment variables               | 200      |
+/// | environment variables, then dotenv  | 200      |
 /// | command line                        | 250      |
 ///
 /// A null value never overrides a lower source, arrays replace instead of
 /// appending, and tables merge key by key.
 pub struct Loader<T> {
     sources: Vec<Box<dyn ConfigSource>>,
-    #[allow(dead_code, reason = "consumed by the environment source in Phase 6")]
     env_vars: Option<BTreeMap<String, String>>,
     on_warning: Box<dyn Fn(&Warning) + Send + Sync>,
     marker: PhantomData<fn() -> T>,
+    #[cfg(feature = "dotenv")]
+    dotenv: Option<PathBuf>,
 }
 
 impl<T: FromNode> Loader<T> {
@@ -48,6 +53,8 @@ impl<T: FromNode> Loader<T> {
             // `on_warning`.
             on_warning: Box::new(|warning| eprintln!("warning: {warning}")),
             marker: PhantomData,
+            #[cfg(feature = "dotenv")]
+            dotenv: None,
         }
     }
 
@@ -100,6 +107,7 @@ impl<T: FromNode> Loader<T> {
         for source in &self.sources {
             layers.push((source.priority(), source.load()?));
         }
+        layers.push((ENV_PRIORITY, self.env_layer()?));
         // Stable: equal priorities keep insertion order, later wins.
         layers.sort_by_key(|(priority, _)| *priority);
 
@@ -121,6 +129,50 @@ impl<T: FromNode> Loader<T> {
 impl<T: FromNode> Default for Loader<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Priority of the environment layer, dotenv values included.
+const ENV_PRIORITY: u8 = 200;
+
+impl<T: FromNode> Loader<T> {
+    /// Variables the schema maps to: the process environment (or the
+    /// `env_vars` map), then the dotenv file as a fallback.
+    fn env_layer(&self) -> Result<ConfigNode, ConfigError> {
+        #[cfg(feature = "dotenv")]
+        let fallback = match &self.dotenv {
+            Some(path) => crate::source::dotenv::load(path)?,
+            None => BTreeMap::new(),
+        };
+        #[cfg(not(feature = "dotenv"))]
+        let fallback = BTreeMap::<String, String>::new();
+
+        env_node(T::shape(), &|name| {
+            let primary = match &self.env_vars {
+                Some(vars) => vars.get(name).cloned().map(Ok),
+                None => std::env::var_os(name).map(OsString::into_string),
+            };
+            primary.or_else(|| fallback.get(name).cloned().map(Ok))
+        })
+    }
+}
+
+#[cfg(feature = "dotenv")]
+impl<T: FromNode> Loader<T> {
+    /// Read variables from the dotenv file at `path` when loading.
+    ///
+    /// They fill in what the real environment (or [`env_vars`](Self::env_vars))
+    /// leaves unset and never override it. A missing file is ignored. The file
+    /// is read on every [`load`](Self::load), so reloads see edits.
+    #[must_use]
+    pub fn dotenv(mut self, path: impl Into<PathBuf>) -> Self {
+        self.dotenv = Some(path.into());
+        self
+    }
+
+    #[cfg_attr(not(feature = "watch"), allow(dead_code, reason = "read by Loader::watch"))]
+    pub(crate) fn dotenv_path(&self) -> Option<&Path> {
+        self.dotenv.as_deref()
     }
 }
 

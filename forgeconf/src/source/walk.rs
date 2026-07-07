@@ -7,6 +7,7 @@ use crate::{FieldInfo, Shape};
 pub(crate) struct Leaf {
     /// Keys from the root to this field; `flatten` adds no segment.
     pub(crate) path: Vec<&'static str>,
+    #[cfg_attr(not(feature = "cli"), allow(dead_code, reason = "read by the CLI source and help"))]
     pub(crate) field: &'static FieldInfo,
     /// The field's shape with `Optional` removed: `Scalar`, `Bool`, a unit-only
     /// `Enum`, or a `List` of those.
