@@ -35,7 +35,7 @@ pub trait Config: FromNode {
 /// A null value never overrides a lower source, arrays replace instead of
 /// appending, and tables merge key by key.
 pub struct Loader<T> {
-    sources: Vec<Box<dyn ConfigSource>>,
+    pub(crate) sources: Vec<Box<dyn ConfigSource>>,
     env_vars: Option<BTreeMap<String, String>>,
     on_warning: Box<dyn Fn(&Warning) + Send + Sync>,
     marker: PhantomData<fn() -> T>,

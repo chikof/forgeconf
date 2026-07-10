@@ -52,6 +52,8 @@ mod shape;
 mod source;
 mod suggest;
 pub mod validators;
+#[cfg(feature = "watch")]
+mod watch;
 
 pub use error::{ConfigError, ErrorKind, PathSegment, Warning};
 /// Derive macro for configuration types, next to the [`Config`] trait it
@@ -98,3 +100,5 @@ pub use node::{ConfigNode, Table, Value};
 pub use origin::Origin;
 pub use shape::{EnumInfo, FieldInfo, Shape, StructInfo, VariantInfo};
 pub use source::{ConfigFile, ConfigSource};
+#[cfg(feature = "watch")]
+pub use watch::Watcher;
