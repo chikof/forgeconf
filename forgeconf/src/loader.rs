@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+
 use std::ffi::OsString;
 use std::marker::PhantomData;
 #[cfg(feature = "dotenv")]
@@ -7,6 +8,8 @@ use std::path::{Path, PathBuf};
 use crate::__private::collect_deprecations;
 use crate::merge::merge;
 use crate::source::env::env_node;
+#[cfg(feature = "cli")]
+use crate::source::cli::cli_node;
 use crate::{ConfigError, ConfigFile, ConfigNode, ConfigSource, FromNode, Table, Warning};
 
 /// A type that knows how to build its own [`Loader`].
@@ -41,6 +44,8 @@ pub struct Loader<T> {
     marker: PhantomData<fn() -> T>,
     #[cfg(feature = "dotenv")]
     dotenv: Option<PathBuf>,
+    #[cfg(feature = "cli")]
+    cli_args: Option<Vec<OsString>>,
 }
 
 impl<T: FromNode> Loader<T> {
@@ -55,6 +60,8 @@ impl<T: FromNode> Loader<T> {
             marker: PhantomData,
             #[cfg(feature = "dotenv")]
             dotenv: None,
+            #[cfg(feature = "cli")]
+            cli_args: None,
         }
     }
 
@@ -108,6 +115,10 @@ impl<T: FromNode> Loader<T> {
             layers.push((source.priority(), source.load()?));
         }
         layers.push((ENV_PRIORITY, self.env_layer()?));
+        #[cfg(feature = "cli")]
+        if let Some(args) = &self.cli_args {
+            layers.push((250, cli_node(T::shape(), args)?));
+        }
         // Stable: equal priorities keep insertion order, later wins.
         layers.sort_by_key(|(priority, _)| *priority);
 
@@ -123,6 +134,49 @@ impl<T: FromNode> Loader<T> {
         }
 
         T::from_node(&merged)
+    }
+}
+
+#[cfg(feature = "cli")]
+impl<T: FromNode> Loader<T> {
+    /// Read flags from the process arguments ([`std::env::args_os`]).
+    ///
+    /// Flags are derived from `T`: `--port`, `--server.max-conn`, `-p` with
+    /// `short`, `--verbose` / `--no-verbose` for booleans. Repeated list flags
+    /// append, `-h` / `--help` yields a [`Help`](crate::ErrorKind::Help) error
+    /// from [`load`](Loader::load). See [`load_or_exit`](Loader::load_or_exit).
+    #[must_use]
+    pub fn cli(self) -> Self {
+        self.cli_args(std::env::args_os())
+    }
+
+    /// Like [`cli`](Loader::cli) with explicit arguments. `args` is the full
+    /// argv, so the first item is the program name. Meant for tests.
+    #[must_use]
+    pub fn cli_args<I>(mut self, args: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<OsString>,
+    {
+        self.cli_args = Some(args.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// [`load`](Loader::load), then exit the process on failure: `--help`
+    /// prints the help text to stdout and exits with status 0, any other
+    /// error prints `error: ...` to stderr and exits with status 2.
+    pub fn load_or_exit(&self) -> T {
+        match self.load() {
+            Ok(value) => value,
+            Err(err) if err.is_help() => {
+                println!("{err}");
+                std::process::exit(0);
+            },
+            Err(err) => {
+                eprintln!("error: {err}");
+                std::process::exit(2);
+            },
+        }
     }
 }
 

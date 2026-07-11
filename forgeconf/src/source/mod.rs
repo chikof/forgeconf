@@ -2,6 +2,8 @@ use std::path::Path;
 
 use crate::{ConfigError, ConfigNode};
 
+#[cfg(feature = "cli")]
+pub(crate) mod cli;
 #[cfg(feature = "dotenv")]
 pub(crate) mod dotenv;
 pub(crate) mod env;

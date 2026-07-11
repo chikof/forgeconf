@@ -44,6 +44,8 @@ mod duration;
 mod error;
 mod format;
 mod from_node;
+#[cfg(feature = "cli")]
+mod help;
 mod loader;
 mod merge;
 mod node;
