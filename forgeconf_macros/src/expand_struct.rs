@@ -114,8 +114,27 @@ fn default_text(expr: &Expr) -> String {
     match expr {
         Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) => s.value(),
         Expr::Lit(lit) => lit.to_token_stream().to_string(),
-        other => other.to_token_stream().to_string(),
+        other => compact(&other.to_token_stream().to_string()),
     }
+}
+
+// Token streams print with a space between every token (`Log :: Info`);
+// help text should read like the source (`Log::Info`).
+fn compact(text: &str) -> String {
+    [
+        (" :: ", "::"),
+        (" ! ", "!"),
+        (" (", "("),
+        ("( ", "("),
+        (" )", ")"),
+        (" [", "["),
+        ("[ ", "["),
+        (" ]", "]"),
+        (" ,", ","),
+        (" . ", "."),
+    ]
+    .iter()
+    .fold(text.to_owned(), |acc, (from, to)| acc.replace(from, to))
 }
 
 fn validate_tokens(field: &FieldDef) -> TokenStream {
@@ -425,5 +444,20 @@ fn newtype(input: &DeriveInput, unnamed: &syn::FieldsUnnamed, errors: &mut Error
             }
         }
         #config
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::default_text;
+
+    #[test]
+    fn default_text_reads_like_source() {
+        let text = |src: &str| default_text(&syn::parse_str(src).expect("expression parses"));
+        assert_eq!(text("Duration::from_secs(30)"), "Duration::from_secs(30)");
+        assert_eq!(text("Log::Info"), "Log::Info");
+        assert_eq!(text("vec![1, 2]"), "vec![1, 2]");
+        assert_eq!(text("\"h\""), "h");
+        assert_eq!(text("8080"), "8080");
     }
 }

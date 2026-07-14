@@ -30,7 +30,9 @@ struct Full {
 }
 
 fn run(args: &[&str]) -> Result<Full, ConfigError> {
-    Full::loader().cli_args(["app"].into_iter().chain(args.iter().copied())).load()
+    Full::loader()
+        .cli_args(["app"].into_iter().chain(args.iter().copied()))
+        .load()
 }
 
 fn ok(args: &[&str]) -> Full {
@@ -78,7 +80,10 @@ fn explicit_flag_name_replaces_the_field_name() {
 #[test]
 fn nested_fields_use_dotted_dashed_names() {
     assert_eq!(ok(&["--server.max-conn", "5"]).server, Server { max_conn: 5 });
-    assert_eq!(fail(&["--server.max_conn", "5"]), "unknown flag --server.max_conn, did you mean --server.max-conn?");
+    assert_eq!(
+        fail(&["--server.max_conn", "5"]),
+        "unknown flag --server.max_conn, did you mean --server.max-conn?"
+    );
 }
 
 #[test]
@@ -170,7 +175,8 @@ fn bad_value_reports_the_flag_as_origin() {
 fn cli_beats_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("app.toml");
-    fs::write(&path, "port = 1\nname = \"file\"\ntags = [\"f\"]\n[server]\nmax_conn = 2\n").unwrap();
+    fs::write(&path, "port = 1\nname = \"file\"\ntags = [\"f\"]\n[server]\nmax_conn = 2\n")
+        .unwrap();
     let cfg = Full::loader()
         .file(ConfigFile::new(&path))
         .cli_args(["app", "--port", "9", "--tags", "c"])
@@ -201,7 +207,11 @@ struct Small {
 }
 
 fn help_of<T: Config>(args: &[&str]) -> String {
-    let err = T::loader().cli_args(args.iter().copied()).load().err().unwrap();
+    let err = T::loader()
+        .cli_args(args.iter().copied())
+        .load()
+        .err()
+        .unwrap();
     assert!(err.is_help());
     err.to_string()
 }
@@ -271,7 +281,10 @@ Options:
 #[test]
 fn help_wins_over_later_flags_only_when_first() {
     assert!(help_of::<Small>(&["app", "--help", "--bogus"]).starts_with("Usage:"));
-    let err = Small::loader().cli_args(["app", "--bogus", "--help"]).load().unwrap_err();
+    let err = Small::loader()
+        .cli_args(["app", "--bogus", "--help"])
+        .load()
+        .unwrap_err();
     assert_eq!(err.to_string(), "unknown flag --bogus");
 }
 

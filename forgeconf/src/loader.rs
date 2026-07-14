@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-
 use std::ffi::OsString;
 use std::marker::PhantomData;
 #[cfg(feature = "dotenv")]
@@ -7,9 +6,9 @@ use std::path::{Path, PathBuf};
 
 use crate::__private::collect_deprecations;
 use crate::merge::merge;
-use crate::source::env::env_node;
 #[cfg(feature = "cli")]
 use crate::source::cli::cli_node;
+use crate::source::env::env_node;
 use crate::{ConfigError, ConfigFile, ConfigNode, ConfigSource, FromNode, Table, Warning};
 
 /// A type that knows how to build its own [`Loader`].
