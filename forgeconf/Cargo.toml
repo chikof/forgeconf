@@ -24,3 +24,6 @@ forgeconf_macros = { version = "=0.5.0", path = "../forgeconf_macros" }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+[lints]
+workspace = true

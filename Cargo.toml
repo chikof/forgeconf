@@ -1,3 +1,58 @@
 [workspace]
 resolver = "2"
 members = ["forgeconf", "forgeconf_macros"]
+
+[workspace.lints.rust]
+unsafe_code = "deny"            # allow per module only with a SAFETY comment and review
+missing_docs = "warn"           # public items are documented
+unreachable_pub = "warn"        # pub only where the API really exposes it
+variant_size_differences = "warn" # enum variants of very different size waste space; box the big one
+
+[workspace.lints.clippy]
+# imports
+wildcard_imports = "warn"
+enum_glob_use = "warn"
+# ownership and signatures
+borrowed_box = "warn"
+ptr_arg = "warn"
+fn_params_excessive_bools = "warn"
+struct_excessive_bools = "warn"
+# traits
+should_implement_trait = "warn"
+new_without_default = "warn"
+wrong_self_convention = "warn"
+len_without_is_empty = "warn"
+# errors and panics
+unwrap_used = "warn"
+unnecessary_unwrap = "warn"
+missing_panics_doc = "warn"
+missing_errors_doc = "warn"
+undocumented_unsafe_blocks = "warn"
+# API surface
+exhaustive_enums = "warn"
+exhaustive_structs = "warn"
+must_use_candidate = "warn"
+# style
+needless_for_each = "warn"
+# memory layout and niches (docs/rust-style.md `## Memory layout`, clippy.toml sets the thresholds)
+large_enum_variant = "warn"
+large_futures = "warn"
+large_stack_frames = "warn"
+large_stack_arrays = "warn"
+large_const_arrays = "warn"
+large_types_passed_by_value = "warn"
+trivially_copy_pass_by_ref = "warn"
+needless_pass_by_value = "warn"
+box_collection = "warn"
+vec_box = "warn"
+redundant_allocation = "warn"
+boxed_local = "warn"
+unnecessary_box_returns = "warn"
+rc_buffer = "warn"
+rc_mutex = "warn"
+option_option = "warn"
+ref_option = "warn"
+ref_option_ref = "warn"
+zero_sized_map_values = "warn"
+inefficient_to_string = "warn"
+non_zero_suggestions = "warn"
