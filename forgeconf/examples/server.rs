@@ -1,3 +1,6 @@
+//! Server configuration layered from a file, the environment and the command
+//! line.
+
 use std::time::Duration;
 
 use forgeconf::Config;

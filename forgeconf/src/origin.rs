@@ -21,16 +21,19 @@ impl Origin {
     }
 
     /// File path or source label.
+    #[must_use]
     pub fn source(&self) -> &str {
         &self.source
     }
 
     /// 1-based line, or `0` when the source has no position.
+    #[must_use]
     pub fn line(&self) -> u32 {
         self.line
     }
 
     /// 1-based column, or `0` when the source has no position.
+    #[must_use]
     pub fn column(&self) -> u32 {
         self.column
     }
@@ -48,6 +51,8 @@ impl Display for Origin {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
 
     #[test]

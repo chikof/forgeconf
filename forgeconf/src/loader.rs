@@ -49,6 +49,7 @@ pub struct Loader<T> {
 
 impl<T: FromNode> Loader<T> {
     /// A loader with no sources.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sources: Vec::new(),
@@ -164,6 +165,7 @@ impl<T: FromNode> Loader<T> {
     /// [`load`](Loader::load), then exit the process on failure: `--help`
     /// prints the help text to stdout and exits with status 0, any other
     /// error prints `error: ...` to stderr and exits with status 2.
+    #[must_use]
     pub fn load_or_exit(&self) -> T {
         match self.load() {
             Ok(value) => value,
@@ -231,6 +233,8 @@ impl<T: FromNode> Loader<T> {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use std::sync::{Arc, Mutex};
 
     use super::*;

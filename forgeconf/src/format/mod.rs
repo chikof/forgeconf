@@ -30,6 +30,7 @@ pub enum FileFormat {
 impl FileFormat {
     /// The format for a file extension (case-insensitive, without the dot).
     /// `None` for unknown extensions and for formats whose feature is off.
+    #[must_use]
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext.to_ascii_lowercase().as_str() {
             #[cfg(feature = "toml")]
@@ -43,6 +44,7 @@ impl FileFormat {
     }
 
     /// Lower-case identifier.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             #[cfg(feature = "toml")]
@@ -74,6 +76,10 @@ pub(crate) fn load_from_path(
 }
 
 /// Parse an in-memory string. Origins name the source `<string>`.
+///
+/// # Errors
+///
+/// Returns a syntax error when `input` is not valid for `format`.
 pub fn parse_str(input: &str, format: FileFormat) -> Result<ConfigNode, ConfigError> {
     parse_source(input, format, "<string>")
 }
@@ -99,6 +105,11 @@ pub(crate) fn parse_source(
 }
 
 /// Parse `input` and convert it into `T`.
+///
+/// # Errors
+///
+/// Returns a syntax error when `input` is not valid for `format`, or the
+/// error from [`FromNode::from_node`] when the tree does not match `T`.
 pub fn from_str<T: FromNode>(input: &str, format: FileFormat) -> Result<T, ConfigError> {
     T::from_node(&parse_str(input, format)?)
 }
@@ -122,6 +133,8 @@ fn infer_from_extension(path: &Path) -> Result<FileFormat, ConfigError> {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use std::fs;
 
     use tempfile::tempdir;

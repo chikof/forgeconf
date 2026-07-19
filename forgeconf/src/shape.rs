@@ -36,6 +36,7 @@ pub struct StructInfo {
 
 impl StructInfo {
     /// Describe struct `name` with `fields`.
+    #[must_use]
     pub const fn new(name: &'static str, fields: &'static [FieldInfo]) -> Self {
         Self {
             name,
@@ -60,21 +61,25 @@ impl StructInfo {
     }
 
     /// Type name.
+    #[must_use]
     pub const fn name(&self) -> &'static str {
         self.name
     }
 
     /// Declared fields in declaration order.
+    #[must_use]
     pub const fn fields(&self) -> &'static [FieldInfo] {
         self.fields
     }
 
     /// Doc text.
+    #[must_use]
     pub const fn docs(&self) -> Option<&'static str> {
         self.doc
     }
 
     /// Environment variable prefix.
+    #[must_use]
     pub const fn prefix(&self) -> Option<&'static str> {
         self.env_prefix
     }
@@ -188,61 +193,73 @@ impl FieldInfo {
     }
 
     /// Key in the configuration tree.
+    #[must_use]
     pub const fn key(&self) -> &'static str {
         self.key
     }
 
     /// Alternative keys.
+    #[must_use]
     pub const fn alias_keys(&self) -> &'static [&'static str] {
         self.aliases
     }
 
     /// Doc text.
+    #[must_use]
     pub const fn docs(&self) -> Option<&'static str> {
         self.doc
     }
 
     /// Environment variable name.
+    #[must_use]
     pub const fn env_var(&self) -> Option<&'static str> {
         self.env
     }
 
     /// Long command-line flag name.
+    #[must_use]
     pub const fn flag_name(&self) -> Option<&'static str> {
         self.flag
     }
 
     /// Short command-line flag.
+    #[must_use]
     pub const fn short_flag(&self) -> Option<char> {
         self.short
     }
 
     /// Whether the field is hidden from the command line.
+    #[must_use]
     pub const fn is_skip_cli(&self) -> bool {
         self.skip_cli
     }
 
     /// Default value as shown in help.
+    #[must_use]
     pub const fn default_value(&self) -> Option<&'static str> {
         self.default_text
     }
 
     /// Whether the value is secret.
+    #[must_use]
     pub const fn is_sensitive(&self) -> bool {
         self.sensitive
     }
 
     /// Deprecation message; empty when none was given.
+    #[must_use]
     pub const fn deprecation(&self) -> Option<&'static str> {
         self.deprecated
     }
 
     /// Whether the field's keys live at the parent level.
+    #[must_use]
     pub const fn is_flatten(&self) -> bool {
         self.flatten
     }
 
     /// Shape of the field's value.
+    #[must_use]
     pub fn shape(&self) -> Shape {
         (self.shape)()
     }
@@ -260,6 +277,7 @@ pub struct EnumInfo {
 
 impl EnumInfo {
     /// Describe enum `name` with `variants`.
+    #[must_use]
     pub const fn new(name: &'static str, variants: &'static [VariantInfo]) -> Self {
         Self { name, variants, doc: None, tag: None }
     }
@@ -279,21 +297,25 @@ impl EnumInfo {
     }
 
     /// Type name.
+    #[must_use]
     pub const fn name(&self) -> &'static str {
         self.name
     }
 
     /// Variants in declaration order.
+    #[must_use]
     pub const fn variants(&self) -> &'static [VariantInfo] {
         self.variants
     }
 
     /// Doc text.
+    #[must_use]
     pub const fn docs(&self) -> Option<&'static str> {
         self.doc
     }
 
     /// Key that names the variant inside a table.
+    #[must_use]
     pub const fn tag_key(&self) -> Option<&'static str> {
         self.tag
     }
@@ -310,6 +332,7 @@ pub struct VariantInfo {
 
 impl VariantInfo {
     /// Describe the unit variant stored under `key`.
+    #[must_use]
     pub const fn new(key: &'static str) -> Self {
         Self { key, doc: None, data: None }
     }
@@ -329,16 +352,19 @@ impl VariantInfo {
     }
 
     /// Key that selects the variant.
+    #[must_use]
     pub const fn key(&self) -> &'static str {
         self.key
     }
 
     /// Doc text.
+    #[must_use]
     pub const fn docs(&self) -> Option<&'static str> {
         self.doc
     }
 
     /// Shape of the payload; `None` for a unit variant.
+    #[must_use]
     pub fn payload(&self) -> Option<Shape> {
         self.data.map(|shape| shape())
     }
@@ -346,6 +372,8 @@ impl VariantInfo {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
 
     fn text_shape() -> Shape {

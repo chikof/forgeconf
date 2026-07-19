@@ -67,6 +67,7 @@ fn report(title: &str, error: &ConfigError) {
 }
 
 #[cfg(feature = "toml")]
+#[allow(clippy::unwrap_used, reason = "the example forces failures to show their reports")]
 fn main() {
     use forgeconf::{ConfigFile, FileFormat, from_str};
 

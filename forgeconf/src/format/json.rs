@@ -262,6 +262,8 @@ fn skip_digits(c: &mut Cursor<'_>) {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
     use crate::Value;
 

@@ -1,4 +1,6 @@
 #![cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
+//! File format parsing tests.
+#![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use forgeconf::{Config, ConfigError, FileFormat, from_str};
 

@@ -1,4 +1,6 @@
 #![cfg(feature = "toml")]
+//! `#[derive(Config)]` struct tests.
+#![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use std::fs;
 
@@ -290,6 +292,7 @@ fn vec_of_structs_error_names_the_index() {
     );
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref, reason = "validators receive `&T`")]
 fn even(value: &u16) -> Result<(), ConfigError> {
     if value % 2 == 0 { Ok(()) } else { Err(ConfigError::invalid("must be even")) }
 }

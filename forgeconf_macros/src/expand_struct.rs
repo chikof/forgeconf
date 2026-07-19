@@ -25,7 +25,7 @@ use syn::{
 use crate::attr::{DefaultSpec, Errors, FieldAttrs, FileSpec, Format, field_attrs, struct_attrs};
 use crate::case::Case;
 
-pub struct FieldDef {
+pub(crate) struct FieldDef {
     pub ident: Ident,
     pub ty: Type,
     pub key: String,
@@ -44,7 +44,7 @@ impl FieldDef {
     }
 }
 
-pub fn doc_string(attrs: &[Attribute]) -> Option<String> {
+pub(crate) fn doc_string(attrs: &[Attribute]) -> Option<String> {
     let lines: Vec<String> = attrs
         .iter()
         .filter(|a| a.path().is_ident("doc"))
@@ -59,7 +59,7 @@ pub fn doc_string(attrs: &[Attribute]) -> Option<String> {
     if lines.is_empty() { None } else { Some(lines.join("\n")) }
 }
 
-pub fn parse_fields(
+pub(crate) fn parse_fields(
     fields: &FieldsNamed,
     rename_all: Option<Case>,
     errors: &mut Errors,
@@ -178,7 +178,7 @@ fn field_stmt(index: usize, field: &FieldDef) -> TokenStream {
 
 /// Statements plus tail expression reading `fields` from `node` / `__table`
 /// and building `ctor { .. }`. The tail has type `Result<_, ConfigError>`.
-pub fn from_table(
+pub(crate) fn from_table(
     fields: &[FieldDef],
     ctor: &TokenStream,
     deny_unknown_fields: bool,
@@ -231,7 +231,7 @@ pub fn from_table(
     }
 }
 
-pub fn field_info(field: &FieldDef) -> TokenStream {
+pub(crate) fn field_info(field: &FieldDef) -> TokenStream {
     let key = &field.key;
     let ty = &field.ty;
     let attrs = &field.attrs;
@@ -273,7 +273,7 @@ pub fn field_info(field: &FieldDef) -> TokenStream {
 
 /// `static` field array named `fields_name` plus `static` struct info named
 /// `info_name`, to be emitted inside a function body.
-pub fn struct_info_statics(
+pub(crate) fn struct_info_statics(
     fields_name: &Ident,
     info_name: &Ident,
     type_name: &str,
@@ -347,7 +347,7 @@ fn debug_impl(ident: &Ident, fields: &[FieldDef]) -> TokenStream {
     }
 }
 
-pub fn expand(input: &DeriveInput, data: &DataStruct, errors: &mut Errors) -> TokenStream {
+pub(crate) fn expand(input: &DeriveInput, data: &DataStruct, errors: &mut Errors) -> TokenStream {
     match &data.fields {
         Fields::Named(named) => named_struct(input, named, errors),
         Fields::Unnamed(unnamed) if unnamed.unnamed.len() == 1 => newtype(input, unnamed, errors),

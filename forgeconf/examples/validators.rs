@@ -59,6 +59,7 @@ struct ServerConfig {
 }
 
 #[cfg(feature = "toml")]
+#[allow(clippy::unwrap_used, reason = "the example forces failures to show their reports")]
 fn main() -> Result<(), ConfigError> {
     use forgeconf::FileFormat;
 

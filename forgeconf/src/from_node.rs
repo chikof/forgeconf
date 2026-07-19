@@ -30,10 +30,16 @@ use crate::{ConfigError, ConfigNode, Shape, Value};
 /// success.
 pub trait FromNode: Sized {
     /// Convert `node` into `Self`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error carrying the node's origin when `node` has the wrong
+    /// type or a value out of range.
     fn from_node(node: &ConfigNode) -> Result<Self, ConfigError>;
 
     /// Value to use when the key is absent or null; `None` means the key is
     /// required.
+    #[must_use]
     fn from_missing() -> Option<Self> {
         None
     }
@@ -368,6 +374,8 @@ where
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
     use crate::{ErrorKind, Origin};
 

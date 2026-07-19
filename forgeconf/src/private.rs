@@ -71,6 +71,7 @@ pub struct Collector {
 
 impl Collector {
     /// An empty collector.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -98,6 +99,7 @@ impl Collector {
 
     /// The recorded errors as one: the error itself when there is exactly one,
     /// [`ErrorKind::Multiple`] otherwise.
+    #[must_use]
     pub fn into_error(mut self) -> ConfigError {
         if self.errors.len() == 1 {
             return self.errors.remove(0);
@@ -207,6 +209,8 @@ fn render(path: &[PathSegment]) -> String {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
     use crate::{FieldInfo, Origin, StructInfo};
 

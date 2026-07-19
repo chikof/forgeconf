@@ -34,11 +34,13 @@ const _: () = assert!(size_of::<Value>() == 32);
 
 impl ConfigNode {
     /// Wrap `value` in a node without an origin.
+    #[must_use]
     pub fn new(value: Value) -> Self {
         Self { value, origin: None }
     }
 
     /// A node holding [`Value::Null`].
+    #[must_use]
     pub fn null() -> Self {
         Self::new(Value::Null)
     }
@@ -49,11 +51,13 @@ impl ConfigNode {
     }
 
     /// A node holding [`Value::Array`].
+    #[must_use]
     pub fn array(items: Vec<ConfigNode>) -> Self {
         Self::new(Value::Array(items))
     }
 
     /// A node holding [`Value::Table`].
+    #[must_use]
     pub fn table(t: Table) -> Self {
         Self::new(Value::Table(t))
     }
@@ -66,21 +70,25 @@ impl ConfigNode {
     }
 
     /// The payload.
+    #[must_use]
     pub fn value(&self) -> &Value {
         &self.value
     }
 
     /// Consume the node and return its payload.
+    #[must_use]
     pub fn into_value(self) -> Value {
         self.value
     }
 
     /// Where this node came from, when known.
+    #[must_use]
     pub fn origin(&self) -> Option<&Origin> {
         self.origin.as_ref()
     }
 
     /// The text of a scalar node.
+    #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         match &self.value {
             Value::Scalar(text) => Some(text),
@@ -89,6 +97,7 @@ impl ConfigNode {
     }
 
     /// The entries of a table node.
+    #[must_use]
     pub fn as_table(&self) -> Option<&Table> {
         match &self.value {
             Value::Table(table) => Some(table),
@@ -97,6 +106,7 @@ impl ConfigNode {
     }
 
     /// The items of an array node.
+    #[must_use]
     pub fn as_array(&self) -> Option<&[ConfigNode]> {
         match &self.value {
             Value::Array(items) => Some(items),
@@ -105,17 +115,20 @@ impl ConfigNode {
     }
 
     /// Whether the node holds [`Value::Null`].
+    #[must_use]
     pub fn is_null(&self) -> bool {
         matches!(self.value, Value::Null)
     }
 
     /// Table lookup; `None` for missing keys and non-table nodes.
+    #[must_use]
     pub fn get(&self, key: &str) -> Option<&ConfigNode> {
         self.as_table()?.get(key)
     }
 
     /// Textual identifier of the payload kind: `"null"`, `"scalar"`, `"array"`
     /// or `"table"`.
+    #[must_use]
     pub fn kind(&self) -> &'static str {
         match self.value {
             Value::Null => "null",
@@ -128,6 +141,8 @@ impl ConfigNode {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
 
     #[test]

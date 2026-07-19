@@ -88,11 +88,13 @@ pub enum PathSegment {
 
 impl ConfigError {
     /// Wrap `kind` with an empty path and no origin.
+    #[must_use]
     pub fn new(kind: ErrorKind) -> Self {
         Self(Box::new(Inner { kind, path: Vec::new(), origin: None }))
     }
 
     /// A required value is absent.
+    #[must_use]
     pub fn missing() -> Self {
         Self::new(ErrorKind::Missing)
     }
@@ -161,17 +163,20 @@ impl ConfigError {
     }
 
     /// What went wrong.
+    #[must_use]
     pub fn kind(&self) -> &ErrorKind {
         &self.0.kind
     }
 
     /// Where the value came from, when known.
+    #[must_use]
     pub fn origin(&self) -> Option<&Origin> {
         self.0.origin.as_ref()
     }
 
     /// Dotted path from the root: `server.port`, `servers[2].host`, or an empty
     /// string at the root.
+    #[must_use]
     pub fn path(&self) -> String {
         let mut out = String::new();
         self.write_path(&mut out);
@@ -179,6 +184,7 @@ impl ConfigError {
     }
 
     /// Whether the user asked for the help text.
+    #[must_use]
     pub fn is_help(&self) -> bool {
         matches!(self.0.kind, ErrorKind::Help(_))
     }
@@ -335,16 +341,19 @@ impl Warning {
     }
 
     /// Dotted path of the value the warning is about.
+    #[must_use]
     pub fn path(&self) -> &str {
         &self.path
     }
 
     /// Human-readable description.
+    #[must_use]
     pub fn message(&self) -> &str {
         &self.message
     }
 
     /// Where the value came from, when known.
+    #[must_use]
     pub fn origin(&self) -> Option<&Origin> {
         self.origin.as_ref()
     }
@@ -362,6 +371,8 @@ impl Display for Warning {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use std::error::Error;
 
     use super::*;

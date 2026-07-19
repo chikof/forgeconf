@@ -947,6 +947,8 @@ fn valid_datetime(b: &[u8]) -> bool {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
     use crate::{Table, Value};
 

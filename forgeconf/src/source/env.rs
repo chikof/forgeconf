@@ -69,6 +69,8 @@ fn insert(table: &mut Table, path: &[&str], node: ConfigNode) {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use std::collections::BTreeMap;
     #[cfg(unix)]
     use std::os::unix::ffi::OsStringExt;

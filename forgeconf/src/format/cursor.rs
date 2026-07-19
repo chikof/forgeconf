@@ -119,6 +119,8 @@ impl<'a> Cursor<'a> {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
 
     #[test]

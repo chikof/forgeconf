@@ -2,7 +2,7 @@
 //! `snake_case`, variant idents as `PascalCase`.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Case {
+pub(crate) enum Case {
     Lower,
     Upper,
     Snake,
@@ -14,7 +14,7 @@ pub enum Case {
 }
 
 impl Case {
-    pub const NAMES: &'static [&'static str] = &[
+    pub(crate) const NAMES: &'static [&'static str] = &[
         "lowercase",
         "UPPERCASE",
         "snake_case",
@@ -25,7 +25,7 @@ impl Case {
         "SCREAMING-KEBAB-CASE",
     ];
 
-    pub fn parse(name: &str) -> Option<Self> {
+    pub(crate) fn parse(name: &str) -> Option<Self> {
         Some(match name {
             "lowercase" => Self::Lower,
             "UPPERCASE" => Self::Upper,
@@ -40,7 +40,7 @@ impl Case {
     }
 
     /// `ident` is a `snake_case` field name without `r#`.
-    pub fn apply_field(self, ident: &str) -> String {
+    pub(crate) fn apply_field(self, ident: &str) -> String {
         match self {
             Self::Lower | Self::Snake => ident.to_owned(),
             Self::Upper | Self::ScreamingSnake => ident.to_ascii_uppercase(),
@@ -52,7 +52,7 @@ impl Case {
     }
 
     /// `ident` is a `PascalCase` variant name without `r#`.
-    pub fn apply_variant(self, ident: &str) -> String {
+    pub(crate) fn apply_variant(self, ident: &str) -> String {
         match self {
             Self::Pascal => ident.to_owned(),
             Self::Lower => ident.to_ascii_lowercase(),

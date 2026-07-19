@@ -133,6 +133,8 @@ fn describe<T: Display>(bounds: &(Bound<T>, Bound<T>)) -> String {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
 
     #[test]

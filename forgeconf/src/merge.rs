@@ -29,6 +29,8 @@ pub(crate) fn merge(base: &mut ConfigNode, overlay: ConfigNode) {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
     use crate::Table;
 

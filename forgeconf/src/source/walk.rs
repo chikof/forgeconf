@@ -95,6 +95,8 @@ fn env_name(prefix: &str, path: &[&str]) -> String {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
     use crate::{EnumInfo, FromNode, StructInfo, VariantInfo};
 

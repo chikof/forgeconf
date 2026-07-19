@@ -1,4 +1,6 @@
 #![cfg(feature = "dotenv")]
+//! `.env` file layer tests.
+#![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use std::fs;
 use std::path::{Path, PathBuf};

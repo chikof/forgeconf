@@ -95,7 +95,7 @@ fn parse_variants(
     out
 }
 
-fn unknown_variant(found: TokenStream, origin: TokenStream, suffix: TokenStream) -> TokenStream {
+fn unknown_variant(found: &TokenStream, origin: &TokenStream, suffix: &TokenStream) -> TokenStream {
     quote! {
         ::core::result::Result::Err(
             ::forgeconf::ConfigError::new(::forgeconf::ErrorKind::UnknownVariant {
@@ -111,7 +111,7 @@ fn keys<'a>(variants: impl Iterator<Item = &'a Variant>) -> Vec<&'a str> {
     variants.map(|v| v.key.as_str()).collect()
 }
 
-pub fn expand(input: &DeriveInput, data: &DataEnum, errors: &mut Errors) -> TokenStream {
+pub(crate) fn expand(input: &DeriveInput, data: &DataEnum, errors: &mut Errors) -> TokenStream {
     let ident = &input.ident;
     let name = ident.unraw().to_string();
     let attrs = enum_attrs(&input.attrs, errors);
@@ -190,7 +190,7 @@ fn external_body(name: &str, variants: &[Variant]) -> TokenStream {
             let (pattern, id) = (v.pattern(), &v.ident);
             quote!(#pattern => ::core::result::Result::Ok(Self::#id))
         });
-        let unknown = unknown_variant(quote!(__name), quote!(node.origin()), quote!());
+        let unknown = unknown_variant(&quote!(__name), &quote!(node.origin()), &quote!());
         quote! {{
             const __EXPECTED: &[&str] = &[#(#unit_keys),*];
             let __name = ::forgeconf::__private::scalar(node, #expected)?;
@@ -222,7 +222,7 @@ fn external_body(name: &str, variants: &[Variant]) -> TokenStream {
         };
         quote!(#pattern => #arm)
     });
-    let unknown = unknown_variant(quote!(__key.as_str()), quote!(__value.origin()), quote!());
+    let unknown = unknown_variant(&quote!(__key.as_str()), &quote!(__value.origin()), &quote!());
     quote! {
         if let ::core::option::Option::Some(__map) = node.as_table() {
             const __EXPECTED: &[&str] = &[#(#data_keys),*];
@@ -262,7 +262,7 @@ fn tagged_body(name: &str, tag: &str, variants: &[Variant]) -> TokenStream {
         };
         quote!(#pattern => #arm)
     });
-    let unknown = unknown_variant(quote!(__name), quote!(__tag.origin()), quote!(.at_key(#tag)));
+    let unknown = unknown_variant(&quote!(__name), &quote!(__tag.origin()), &quote!(.at_key(#tag)));
     quote! {
         const __EXPECTED: &[&str] = &[#(#all_keys),*];
         let __table = ::forgeconf::__private::table(node, #name)?;

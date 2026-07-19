@@ -940,6 +940,8 @@ fn fold(lines: &[&str]) -> String {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
     use crate::merge::merge;
     use crate::{ConfigNode, Value};

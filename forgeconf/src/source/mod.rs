@@ -15,6 +15,10 @@ pub use file::ConfigFile;
 /// A provider of configuration data, merged by [`Loader`](crate::Loader).
 pub trait ConfigSource: Send + Sync {
     /// Read the source into a node tree.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the source cannot be read or parsed.
     fn load(&self) -> Result<ConfigNode, ConfigError>;
 
     /// Higher priority sources override lower priority ones. Equal priorities

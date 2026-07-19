@@ -10,17 +10,17 @@ use crate::case::Case;
 
 /// Accumulates spanned errors so one derive run reports all of them.
 #[derive(Default)]
-pub struct Errors(Option<Error>);
+pub(crate) struct Errors(Option<Error>);
 
 impl Errors {
-    pub fn push(&mut self, error: Error) {
+    pub(crate) fn push(&mut self, error: Error) {
         match &mut self.0 {
             Some(first) => first.combine(error),
             None => self.0 = Some(error),
         }
     }
 
-    pub fn finish<T>(self, value: T) -> Result<T> {
+    pub(crate) fn finish<T>(self, value: T) -> Result<T> {
         match self.0 {
             Some(error) => Err(error),
             None => Ok(value),
@@ -29,13 +29,13 @@ impl Errors {
 }
 
 #[derive(Clone, Copy)]
-pub enum Format {
+pub(crate) enum Format {
     Toml,
     Json,
     Yaml,
 }
 
-pub struct FileSpec {
+pub(crate) struct FileSpec {
     pub path: Expr,
     pub format: Option<Format>,
     pub priority: Option<u8>,
@@ -43,7 +43,7 @@ pub struct FileSpec {
 }
 
 #[derive(Default)]
-pub struct StructAttrs {
+pub(crate) struct StructAttrs {
     pub files: Vec<FileSpec>,
     pub env_prefix: Option<LitStr>,
     pub rename_all: Option<Case>,
@@ -52,24 +52,25 @@ pub struct StructAttrs {
 }
 
 #[derive(Default)]
-pub struct EnumAttrs {
+pub(crate) struct EnumAttrs {
     pub rename_all: Option<Case>,
     pub tag: Option<LitStr>,
 }
 
 #[derive(Default)]
-pub struct VariantAttrs {
+pub(crate) struct VariantAttrs {
     pub rename: Option<LitStr>,
     pub aliases: Vec<LitStr>,
 }
 
-pub enum DefaultSpec {
+pub(crate) enum DefaultSpec {
     Trait,
     Expr(Box<Expr>),
 }
 
 #[derive(Default)]
-pub struct FieldAttrs {
+#[allow(clippy::struct_excessive_bools, reason = "one flag per user-facing field attribute")]
+pub(crate) struct FieldAttrs {
     pub rename: Option<LitStr>,
     pub aliases: Vec<LitStr>,
     pub default: Option<DefaultSpec>,
@@ -107,6 +108,7 @@ const KEYS: &[&str] = &[
 ];
 
 #[derive(Default)]
+#[allow(clippy::struct_excessive_bools, reason = "one flag per user-facing attribute key")]
 struct Raw {
     seen: Vec<(&'static str, Span)>,
     files: Vec<FileSpec>,
@@ -329,7 +331,7 @@ fn check_allowed(raw: &Raw, allowed: &[&str], place: &str, errors: &mut Errors) 
     }
 }
 
-pub fn struct_attrs(attrs: &[Attribute], newtype: bool, errors: &mut Errors) -> StructAttrs {
+pub(crate) fn struct_attrs(attrs: &[Attribute], newtype: bool, errors: &mut Errors) -> StructAttrs {
     let raw = parse_raw(attrs, errors);
     if newtype {
         check_allowed(&raw, &["file"], "a newtype struct", errors);
@@ -346,19 +348,19 @@ pub fn struct_attrs(attrs: &[Attribute], newtype: bool, errors: &mut Errors) -> 
     }
 }
 
-pub fn enum_attrs(attrs: &[Attribute], errors: &mut Errors) -> EnumAttrs {
+pub(crate) fn enum_attrs(attrs: &[Attribute], errors: &mut Errors) -> EnumAttrs {
     let raw = parse_raw(attrs, errors);
     check_allowed(&raw, &["rename_all", "tag"], "an enum", errors);
     EnumAttrs { rename_all: raw.rename_all, tag: raw.tag }
 }
 
-pub fn variant_attrs(attrs: &[Attribute], errors: &mut Errors) -> VariantAttrs {
+pub(crate) fn variant_attrs(attrs: &[Attribute], errors: &mut Errors) -> VariantAttrs {
     let raw = parse_raw(attrs, errors);
     check_allowed(&raw, &["rename", "alias"], "a variant", errors);
     VariantAttrs { rename: raw.rename, aliases: raw.aliases }
 }
 
-pub fn field_attrs(attrs: &[Attribute], newtype: bool, errors: &mut Errors) -> FieldAttrs {
+pub(crate) fn field_attrs(attrs: &[Attribute], newtype: bool, errors: &mut Errors) -> FieldAttrs {
     let raw = parse_raw(attrs, errors);
     if newtype {
         check_allowed(&raw, &["validate"], "the field of a newtype struct", errors);

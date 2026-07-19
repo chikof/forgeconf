@@ -188,6 +188,8 @@ fn parse_double_quoted(
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use super::*;
 
     fn pairs(input: &str) -> Vec<(String, String)> {

@@ -73,6 +73,8 @@ fn is_not_found(err: &ConfigError) -> bool {
 
 #[cfg(all(test, feature = "toml"))]
 mod test {
+    #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
+
     use std::fs;
 
     use tempfile::tempdir;

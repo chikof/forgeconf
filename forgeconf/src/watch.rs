@@ -20,17 +20,20 @@ pub struct Watcher<T> {
 
 impl<T> Watcher<T> {
     /// The next reload result if one is already waiting.
+    #[must_use]
     pub fn try_recv(&self) -> Option<Result<T, ConfigError>> {
         self.rx.try_recv().ok()
     }
 
     /// Block until the next reload. `None` once the watcher thread has ended.
+    #[must_use]
     pub fn recv(&self) -> Option<Result<T, ConfigError>> {
         self.rx.recv().ok()
     }
 
     /// Block for at most `timeout`. `None` on timeout or once the watcher
     /// thread has ended.
+    #[must_use]
     pub fn recv_timeout(&self, timeout: Duration) -> Option<Result<T, ConfigError>> {
         self.rx.recv_timeout(timeout).ok()
     }
