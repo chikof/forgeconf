@@ -89,7 +89,14 @@ jobs:
         run: cargo publish --package forgeconf_macros
 
       - name: Publish forgeconf
-        run: cargo publish --package forgeconf
+        # Retries cover the index race if forgeconf_macros is not visible yet.
+        run: |
+          for attempt in 1 2 3; do
+            cargo publish --package forgeconf && exit 0
+            echo "publish attempt ${attempt} failed; retrying in 30 s"
+            sleep 30
+          done
+          exit 1
 
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
