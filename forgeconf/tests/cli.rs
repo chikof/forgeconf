@@ -1,5 +1,5 @@
-#![cfg(all(feature = "cli", feature = "toml"))]
 //! CLI argument layer tests.
+#![cfg(all(feature = "cli", feature = "toml"))]
 #![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use std::ffi::OsString;

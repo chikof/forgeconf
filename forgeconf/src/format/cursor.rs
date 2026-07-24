@@ -48,6 +48,12 @@ impl<'a> Cursor<'a> {
         self.src.get(self.pos..).unwrap_or("")
     }
 
+    /// Byte just before the next one, `None` at the start of input.
+    #[cfg(feature = "yaml")]
+    pub(crate) fn prev_byte(&self) -> Option<u8> {
+        self.src.as_bytes().get(self.pos.checked_sub(1)?).copied()
+    }
+
     /// Byte offset of the next character.
     pub(crate) fn pos(&self) -> usize {
         self.pos

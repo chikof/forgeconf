@@ -1,5 +1,5 @@
-#![cfg(all(feature = "watch", feature = "toml"))]
 //! File watching and reload tests.
+#![cfg(all(feature = "watch", feature = "toml"))]
 #![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use std::fs;

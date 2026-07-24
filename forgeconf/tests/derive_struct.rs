@@ -1,5 +1,5 @@
-#![cfg(feature = "toml")]
 //! `#[derive(Config)]` struct tests.
+#![cfg(feature = "toml")]
 #![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use std::fs;

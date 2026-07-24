@@ -1,5 +1,5 @@
-#![cfg(feature = "dotenv")]
 //! `.env` file layer tests.
+#![cfg(feature = "dotenv")]
 #![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use std::fs;

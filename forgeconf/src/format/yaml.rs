@@ -3,9 +3,9 @@
 //! Supported: block mappings and sequences (space indentation), flow
 //! collections, plain / single-quoted / double-quoted scalars, `|` and `>`
 //! block scalars, comments, one optional `---` and one optional trailing `...`.
-//! Anchors, aliases, tags, complex keys, merge keys and further documents are
-//! rejected with `Unsupported`. Scalars stay text; only the null forms become
-//! `Null`.
+//! Anchors, aliases, tags, directives, complex and empty keys, merge keys and
+//! further documents are rejected with `Unsupported`. Scalars stay text; only
+//! the null forms become `Null`.
 
 use std::iter::repeat_n;
 
@@ -24,6 +24,7 @@ pub(crate) fn parse(input: &str, source: &str) -> Res<ConfigNode> {
         cur: Cursor::new(input, source),
         content_pos: usize::MAX,
         content_indent: 0,
+        tab: None,
     };
     parser.document()
 }
@@ -69,6 +70,10 @@ struct Parser<'a> {
     /// call without consuming anything returns the same answer.
     content_pos: usize,
     content_indent: usize,
+    /// Where the first tab sits in the leading whitespace of the content line
+    /// the parser is on. A tab may separate a scalar or flow collection from
+    /// the margin, but never indent a block collection.
+    tab: Option<Origin>,
 }
 
 impl Parser<'_> {
@@ -76,14 +81,24 @@ impl Parser<'_> {
         let start = self.cur.origin();
         let root = match self.next_content()? {
             None => None,
+            Some(0) if self.cur.peek() == Some(b'%') => {
+                return Err(unsupported_at(
+                    &self.cur.origin(),
+                    "yaml directives (%) are not supported",
+                ));
+            },
             Some(0) if self.marker() == Some(Marker::Start) => {
                 self.cur.eat("---");
                 self.skip_spaces();
                 if self.at_line_end() {
                     Some(self.nested(-1, false)?)
                 } else {
+                    // A block collection cannot start on the `---` line.
                     let indent = self.column();
-                    Some(self.node(indent, -1)?)
+                    Some(match self.cur.peek() {
+                        Some(b'[' | b'{') => self.node(indent, -1)?,
+                        _ => self.value(-1, false)?,
+                    })
                 }
             },
             Some(0) if self.marker() == Some(Marker::End) => None,
@@ -125,10 +140,26 @@ impl Parser<'_> {
             .saturating_sub(1)
     }
 
-    fn skip_spaces(&mut self) {
-        while matches!(self.cur.peek(), Some(b' ' | b'\t')) {
+    /// Skip spaces and tabs; true when a tab was among them.
+    fn skip_spaces(&mut self) -> bool {
+        let mut tab = false;
+        while let Some(byte @ (b' ' | b'\t')) = self.cur.peek() {
+            tab |= byte == b'\t';
             self.cur.bump();
         }
+        tab
+    }
+
+    fn no_tab_indent(&self) -> Res<()> {
+        match &self.tab {
+            Some(origin) => Err(syntax_at(origin, "tabs are not allowed for indentation")),
+            None => Ok(()),
+        }
+    }
+
+    fn comment_needs_space(&self) -> ConfigError {
+        self.cur
+            .error(FORMAT, "a comment needs whitespace before '#'")
     }
 
     fn skip_comment(&mut self) {
@@ -178,18 +209,20 @@ impl Parser<'_> {
         }
         loop {
             let line_start = self.column() == 0;
+            let mut spaced = line_start || matches!(self.cur.prev_byte(), Some(b' ' | b'\t'));
+            self.tab = None;
             while let Some(byte @ (b' ' | b'\t')) = self.cur.peek() {
-                if byte == b'\t' && line_start && !self.blank_or_comment_line() {
-                    return Err(self
-                        .cur
-                        .error(FORMAT, "tabs are not allowed for indentation"));
+                if byte == b'\t' && line_start && self.tab.is_none() {
+                    self.tab = Some(self.cur.origin());
                 }
+                spaced = true;
                 self.cur.bump();
             }
             match self.cur.peek() {
                 None => return Ok(None),
                 Some(b'\n' | b'\r') => self.eol(),
-                Some(b'#') => self.skip_comment(),
+                Some(b'#') if spaced => self.skip_comment(),
+                Some(b'#') => return Err(self.comment_needs_space()),
                 Some(_) if !line_start => {
                     let found = self.cur.rest().chars().next().unwrap_or(' ');
                     return Err(self.cur.error(FORMAT, format!("unexpected '{found}'")));
@@ -201,12 +234,6 @@ impl Parser<'_> {
                 },
             }
         }
-    }
-
-    /// True when the rest of the line holds only whitespace or a comment.
-    fn blank_or_comment_line(&self) -> bool {
-        let rest = self.cur.rest().trim_start_matches([' ', '\t']);
-        rest.is_empty() || rest.starts_with(['\n', '\r', '#'])
     }
 
     fn reject_indicator(&self) -> Res<()> {
@@ -262,19 +289,23 @@ impl Parser<'_> {
             },
             Some(b'|' | b'>') => self.block_scalar(parent),
             _ => match self.head(parent)? {
-                Head::Key(key, origin) => self.mapping(indent, key, origin),
+                Head::Key(key, origin) => {
+                    self.no_tab_indent()?;
+                    self.mapping(indent, key, origin)
+                },
                 Head::Scalar(node) => Ok(node),
             },
         }
     }
 
     fn sequence(&mut self, indent: usize) -> Res<ConfigNode> {
+        self.no_tab_indent()?;
         self.cur.enter(FORMAT)?;
         let origin = self.cur.origin();
         let mut items = Vec::new();
         loop {
             self.cur.bump();
-            self.skip_spaces();
+            self.tab = self.skip_spaces().then(|| self.cur.origin());
             let parent = to_isize(indent);
             let item = if self.at_line_end() {
                 self.nested(parent, false)?
@@ -283,7 +314,9 @@ impl Parser<'_> {
                 self.node(column, parent)?
             };
             items.push(item);
-            match self.next_content()? {
+            let next = self.next_content()?;
+            self.no_tab_indent()?;
+            match next {
                 Some(next) if next == indent && !self.doc_marker(next) && self.is_seq_entry() => {},
                 Some(next) if next > indent => {
                     return Err(self
@@ -315,7 +348,9 @@ impl Parser<'_> {
                 self.value(parent, false)?
             };
             table.insert(key, value);
-            match self.next_content()? {
+            let next = self.next_content()?;
+            self.no_tab_indent()?;
+            match next {
                 Some(next) if next == indent && !self.doc_marker(next) => {
                     (key, key_origin) = self.key()?;
                 },
@@ -334,8 +369,9 @@ impl Parser<'_> {
     fn head(&mut self, parent: isize) -> Res<Head> {
         let origin = self.cur.origin();
         if matches!(self.cur.peek(), Some(b'"' | b'\'')) {
-            let text = self.quoted()?;
+            let text = self.quoted(parent)?;
             if self.eat_key_colon() {
+                self.single_line_key(&origin)?;
                 return Ok(Head::Key(text, origin));
             }
             return Ok(Head::Scalar(ConfigNode::scalar(text).with_origin(origin)));
@@ -344,6 +380,14 @@ impl Parser<'_> {
             return Ok(Head::Key(key, origin));
         }
         Ok(Head::Scalar(self.plain_scalar(parent, false)?))
+    }
+
+    /// An implicit key cannot span lines.
+    fn single_line_key(&self, start: &Origin) -> Res<()> {
+        if self.cur.origin().line() == start.line() {
+            return Ok(());
+        }
+        Err(syntax_at(start, "implicit mapping keys must stay on one line"))
     }
 
     /// Next key of a block mapping, with its `:` consumed.
@@ -357,10 +401,11 @@ impl Parser<'_> {
             return Err(unsupported_at(&origin, "yaml complex keys (?) are not supported"));
         }
         if matches!(self.cur.peek(), Some(b'"' | b'\'')) {
-            let text = self.quoted()?;
+            let text = self.quoted(-1)?;
             if !self.eat_key_colon() {
                 return Err(syntax_at(&origin, "expected ':' after mapping key"));
             }
+            self.single_line_key(&origin)?;
             return Ok((text, origin));
         }
         match self.plain_key()? {
@@ -378,12 +423,7 @@ impl Parser<'_> {
             return Ok(None);
         }
         let key = rest.get(..end).unwrap_or("");
-        if key.is_empty() {
-            return Err(syntax_at(&origin, "empty mapping keys are not supported"));
-        }
-        if key == "<<" {
-            return Err(unsupported_at(&origin, "yaml merge keys (<<) are not supported"));
-        }
+        check_plain_key(key, &origin)?;
         self.advance(colon + 1);
         Ok(Some(key.to_owned()))
     }
@@ -408,32 +448,35 @@ impl Parser<'_> {
     fn value(&mut self, parent: isize, flow: bool) -> Res<ConfigNode> {
         self.reject_indicator()?;
         match self.cur.peek() {
-            Some(b'[') => self.flow_seq(),
-            Some(b'{') => self.flow_map(),
+            Some(b'[') => self.flow_seq(parent),
+            Some(b'{') => self.flow_map(parent),
             Some(b'"' | b'\'') => {
                 let origin = self.cur.origin();
-                Ok(ConfigNode::scalar(self.quoted()?).with_origin(origin))
+                Ok(ConfigNode::scalar(self.quoted(parent)?).with_origin(origin))
             },
             Some(b'|' | b'>') if flow => Err(self
                 .cur
                 .error(FORMAT, "block scalars are not allowed inside flow collections")),
             Some(b'|' | b'>') => self.block_scalar(parent),
-            Some(b'-') if !flow && self.is_seq_entry() => Err(self
+            Some(b'-') if self.dash_entry(flow) => Err(self
                 .cur
                 .error(FORMAT, "block sequence entries are not allowed in this context")),
             _ => self.plain_scalar(parent, flow),
         }
     }
 
+    /// A `-` that cannot start a plain scalar: followed by a space or the end
+    /// of the line, or inside flow collections also by a flow indicator.
+    fn dash_entry(&self, flow: bool) -> bool {
+        self.cur.peek() == Some(b'-')
+            && (is_space_or_end(self.cur.peek_at(1))
+                || (flow && self.cur.peek_at(1).is_some_and(is_flow_indicator)))
+    }
+
     fn plain_scalar(&mut self, parent: isize, flow: bool) -> Res<ConfigNode> {
         let origin = self.cur.origin();
         let text = self.plain_text(parent, flow)?;
-        let node = if matches!(text.as_str(), "" | "~" | "null" | "Null" | "NULL") {
-            ConfigNode::null()
-        } else {
-            ConfigNode::scalar(text)
-        };
-        Ok(node.with_origin(origin))
+        Ok(plain_node(text, origin))
     }
 
     /// Text of a plain scalar, with multi-line folding.
@@ -486,11 +529,15 @@ impl Parser<'_> {
                 None | Some(b'#') => return None,
                 Some(b'\n' | b'\r') => it = body,
                 Some(first) => {
-                    let ends = if flow {
-                        matches!(first, b',' | b'[' | b']' | b'{' | b'}')
-                    } else {
-                        !exceeds(spaces, parent)
-                    };
+                    let next = body.as_bytes().get(1).copied();
+                    // In flow context a line starting with `:` is a value
+                    // indicator, so it ends the scalar (a key).
+                    let ends = !exceeds(spaces, parent)
+                        || (flow
+                            && (is_flow_indicator(first)
+                                || (first == b':'
+                                    && (is_space_or_end(next)
+                                        || next.is_some_and(is_flow_indicator)))));
                     if ends || (spaces == 0 && marker_of(body).is_some()) {
                         return None;
                     }
@@ -500,7 +547,9 @@ impl Parser<'_> {
         }
     }
 
-    fn quoted(&mut self) -> Res<String> {
+    /// `parent` is the indentation of the enclosing collection; continuation
+    /// lines must be indented deeper than it.
+    fn quoted(&mut self, parent: isize) -> Res<String> {
         let origin = self.cur.origin();
         let double = self.cur.bump() == Some('"');
         let mut out = String::new();
@@ -518,7 +567,7 @@ impl Parser<'_> {
                     if ch == '\r' && self.cur.peek() == Some(b'\n') {
                         self.cur.bump();
                     }
-                    self.fold_break(&mut out);
+                    self.fold_break(&mut out, parent)?;
                 },
                 '\'' if !double => {
                     out.push_str(&pending);
@@ -537,7 +586,7 @@ impl Parser<'_> {
                 '\\' if double => {
                     out.push_str(&pending);
                     pending.clear();
-                    self.escape(&mut out, &origin)?;
+                    self.escape(&mut out, &origin, parent)?;
                 },
                 _ => {
                     out.push_str(&pending);
@@ -551,9 +600,10 @@ impl Parser<'_> {
     /// After a line break inside a quoted scalar: skip blank lines and leading
     /// whitespace, then fold the breaks (one break is a space, `n` breaks are
     /// `n - 1` newlines).
-    fn fold_break(&mut self, out: &mut String) {
+    fn fold_break(&mut self, out: &mut String, parent: isize) -> Res<()> {
         let mut breaks = 1;
         loop {
+            self.check_quoted_line(parent)?;
             self.skip_spaces();
             if matches!(self.cur.peek(), Some(b'\n' | b'\r')) {
                 self.eol();
@@ -567,10 +617,32 @@ impl Parser<'_> {
         } else {
             out.extend(repeat_n('\n', breaks - 1));
         }
+        Ok(())
+    }
+
+    /// At the start of a continuation line of a quoted scalar: a document
+    /// marker ends the document and the text must be indented deeper than the
+    /// enclosing collection (tabs do not count). Blank lines are exempt.
+    fn check_quoted_line(&self, parent: isize) -> Res<()> {
+        let (spaces, body) = line_body(self.cur.rest());
+        if body.is_empty() || body.starts_with(['\n', '\r']) {
+            return Ok(());
+        }
+        if marker_of(self.cur.rest()).is_some() {
+            return Err(self
+                .cur
+                .error(FORMAT, "document marker inside a quoted scalar"));
+        }
+        if !exceeds(spaces, parent) {
+            return Err(self
+                .cur
+                .error(FORMAT, "continuation line of a quoted scalar is not indented"));
+        }
+        Ok(())
     }
 
     /// Decode the escape after a consumed `\` in a double-quoted scalar.
-    fn escape(&mut self, out: &mut String, origin: &Origin) -> Res<()> {
+    fn escape(&mut self, out: &mut String, origin: &Origin, parent: isize) -> Res<()> {
         let Some(ch) = self.cur.bump() else {
             return Err(syntax_at(origin, "unterminated double-quoted string"));
         };
@@ -599,6 +671,7 @@ impl Parser<'_> {
                 if ch == '\r' && self.cur.peek() == Some(b'\n') {
                     self.cur.bump();
                 }
+                self.check_quoted_line(parent)?;
                 self.skip_spaces();
                 return Ok(());
             },
@@ -647,8 +720,13 @@ impl Parser<'_> {
             }
             self.cur.bump();
         }
+        let header_end = self.cur.pos();
         self.skip_spaces();
+        let spaced = self.cur.pos() > header_end;
         if self.cur.peek() == Some(b'#') {
+            if !spaced {
+                return Err(self.comment_needs_space());
+            }
             self.skip_comment();
         }
         if self.cur.peek().is_some() {
@@ -662,32 +740,50 @@ impl Parser<'_> {
 
         let body = self.cur.rest();
         let mut indent = explicit.map(|digits| parent_floor(parent) + digits);
+        // Widest space-only line before the indentation is known: the first
+        // text line cannot be indented less than it.
+        let mut widest_blank = 0;
         let mut lines: Vec<&str> = Vec::new();
         let mut rest = body;
-        let mut terminated = false;
         while !rest.is_empty() {
             let (line, after) = split_line(rest);
-            if line.trim_matches([' ', '\t']).is_empty() {
+            let spaces = line.bytes().take_while(|&b| b == b' ').count();
+            let blank = spaces == line.len();
+            let width = match indent {
+                Some(width) => width,
+                None if blank => {
+                    widest_blank = widest_blank.max(spaces);
+                    usize::MAX
+                },
+                None if exceeds(spaces, parent) => {
+                    if spaces < widest_blank {
+                        return Err(self.cur.error(
+                            FORMAT,
+                            "a leading blank line is indented deeper than the first text line",
+                        ));
+                    }
+                    indent = Some(spaces);
+                    spaces
+                },
+                None => break,
+            };
+            if blank && spaces <= width {
                 lines.push("");
+            } else if spaces < width || (spaces == 0 && marker_of(line).is_some()) {
+                break;
             } else {
-                let spaces = line.bytes().take_while(|&b| b == b' ').count();
-                let width = match indent {
-                    Some(width) => width,
-                    None if exceeds(spaces, parent) => {
-                        indent = Some(spaces);
-                        spaces
-                    },
-                    None => break,
-                };
-                if spaces < width || (spaces == 0 && marker_of(line).is_some()) {
-                    break;
-                }
+                // Past the indentation, spaces are content, even alone on a
+                // line.
                 lines.push(line.get(width..).unwrap_or(""));
             }
-            terminated = after.len() != rest.len() - line.len();
             rest = after;
         }
         self.advance(body.len() - rest.len());
+        if rest.trim_start_matches(' ').starts_with('\t') {
+            return Err(self
+                .cur
+                .error(FORMAT, "tabs are not allowed for indentation"));
+        }
 
         let trailing = lines
             .iter()
@@ -696,7 +792,8 @@ impl Parser<'_> {
             .count();
         let content = lines.get(..lines.len() - trailing).unwrap_or(&[]);
         let mut text = if folded { fold(content) } else { content.join("\n") };
-        let final_break = !content.is_empty() && (terminated || trailing > 0);
+        // The end of input also ends the last line.
+        let final_break = !content.is_empty();
         match chomp {
             Chomp::Strip => {},
             Chomp::Clip => {
@@ -716,27 +813,59 @@ impl Parser<'_> {
 
     // ---- flow collections -----------------------------------------------
 
-    /// Skip whitespace, line breaks and comments inside a flow collection.
-    fn flow_ws(&mut self) {
+    /// Skip whitespace, line breaks and comments inside a flow collection
+    /// that sits in a block collection indented `parent`.
+    fn flow_ws(&mut self, parent: isize) -> Res<()> {
+        let mut spaced = matches!(self.cur.prev_byte(), None | Some(b' ' | b'\t' | b'\n' | b'\r'));
         loop {
             match self.cur.peek() {
-                Some(b' ' | b'\t' | b'\n' | b'\r') => {
+                Some(b' ' | b'\t') => {
                     self.cur.bump();
+                    spaced = true;
                 },
-                Some(b'#') => self.skip_comment(),
-                _ => break,
+                Some(b'\n' | b'\r') => {
+                    self.eol();
+                    spaced = true;
+                    self.flow_line(parent)?;
+                },
+                Some(b'#') if spaced => self.skip_comment(),
+                Some(b'#') => return Err(self.comment_needs_space()),
+                _ => return Ok(()),
             }
         }
     }
 
-    fn flow_seq(&mut self) -> Res<ConfigNode> {
+    /// At the start of a line inside a flow collection: a document marker is
+    /// not allowed and text must be indented deeper than the enclosing block
+    /// collection (tabs do not count).
+    fn flow_line(&self, parent: isize) -> Res<()> {
+        let (spaces, body) = line_body(self.cur.rest());
+        if body.is_empty() || body.starts_with(['\n', '\r', '#']) {
+            return Ok(());
+        }
+        if marker_of(self.cur.rest()).is_some() {
+            return Err(self
+                .cur
+                .error(FORMAT, "document marker inside a flow collection"));
+        }
+        // A closing bracket may sit at the parent's own indentation:
+        // `key: [\n  a,\n]` is common and unambiguous.
+        if !exceeds(spaces, parent) && !body.starts_with([']', '}']) {
+            return Err(self
+                .cur
+                .error(FORMAT, "flow collection line is not indented deeper than its parent"));
+        }
+        Ok(())
+    }
+
+    fn flow_seq(&mut self, parent: isize) -> Res<ConfigNode> {
         self.cur.enter(FORMAT)?;
         let origin = self.cur.origin();
         self.cur.bump();
         let mut items = Vec::new();
         let mut need_comma = false;
         loop {
-            self.flow_ws();
+            self.flow_ws(parent)?;
             match self.cur.peek() {
                 None => return Err(syntax_at(&origin, "unterminated flow sequence")),
                 Some(b']') => {
@@ -756,21 +885,67 @@ impl Parser<'_> {
                 },
                 Some(_) => {},
             }
-            items.push(self.value(-1, true)?);
+            items.push(self.flow_seq_entry(parent)?);
             need_comma = true;
         }
         self.cur.leave();
         Ok(ConfigNode::array(items).with_origin(origin))
     }
 
-    fn flow_map(&mut self) -> Res<ConfigNode> {
+    /// One entry of a flow sequence: a node, or a single `key: value` pair
+    /// (a one-entry mapping).
+    fn flow_seq_entry(&mut self, parent: isize) -> Res<ConfigNode> {
+        let origin = self.cur.origin();
+        self.reject_indicator()?;
+        let (key, quoted) = match self.cur.peek() {
+            Some(b'[' | b'{') => {
+                let node = self.value(parent, true)?;
+                self.flow_ws(parent)?;
+                if self.cur.peek() == Some(b':') {
+                    return Err(unsupported_at(
+                        &self.cur.origin(),
+                        "yaml complex keys (?) are not supported",
+                    ));
+                }
+                return Ok(node);
+            },
+            Some(b'"' | b'\'') => (self.quoted(parent)?, true),
+            Some(b'|' | b'>') => return self.value(parent, true),
+            Some(b'-') if self.dash_entry(true) => return self.value(parent, true),
+            _ => (self.plain_text(parent, true)?, false),
+        };
+        self.flow_ws(parent)?;
+        if self.cur.peek() != Some(b':') {
+            return Ok(if quoted {
+                ConfigNode::scalar(key).with_origin(origin)
+            } else {
+                plain_node(key, origin)
+            });
+        }
+        self.single_line_key(&origin)?;
+        if !quoted {
+            check_plain_key(&key, &origin)?;
+        }
+        self.cur.bump();
+        self.flow_ws(parent)?;
+        let value = match self.cur.peek() {
+            None => return Err(syntax_at(&origin, "unterminated flow sequence")),
+            Some(b',' | b']') => ConfigNode::null().with_origin(self.cur.origin()),
+            Some(_) => self.value(parent, true)?,
+        };
+        let mut table = Table::new();
+        table.insert(key, value);
+        Ok(ConfigNode::table(table).with_origin(origin))
+    }
+
+    fn flow_map(&mut self, parent: isize) -> Res<ConfigNode> {
         self.cur.enter(FORMAT)?;
         let origin = self.cur.origin();
         self.cur.bump();
         let mut table = Table::new();
         let mut need_comma = false;
         loop {
-            self.flow_ws();
+            self.flow_ws(parent)?;
             match self.cur.peek() {
                 None => return Err(syntax_at(&origin, "unterminated flow mapping")),
                 Some(b'}') => {
@@ -797,30 +972,22 @@ impl Parser<'_> {
             }
             self.reject_indicator()?;
             let quoted = matches!(self.cur.peek(), Some(b'"' | b'\''));
-            let key = if quoted { self.quoted()? } else { self.plain_text(-1, true)? };
+            let key = if quoted { self.quoted(parent)? } else { self.plain_text(parent, true)? };
             if !quoted {
-                if key.is_empty() {
-                    return Err(syntax_at(&key_origin, "empty mapping keys are not supported"));
-                }
-                if key == "<<" {
-                    return Err(unsupported_at(
-                        &key_origin,
-                        "yaml merge keys (<<) are not supported",
-                    ));
-                }
+                check_plain_key(&key, &key_origin)?;
             }
             if table.contains_key(&key) {
                 return Err(syntax_at(&key_origin, format!("duplicate key \"{key}\"")));
             }
 
-            self.flow_ws();
+            self.flow_ws(parent)?;
             let value = if self.cur.peek() == Some(b':') {
                 self.cur.bump();
-                self.flow_ws();
+                self.flow_ws(parent)?;
                 match self.cur.peek() {
                     None => return Err(syntax_at(&origin, "unterminated flow mapping")),
                     Some(b',' | b'}') => ConfigNode::null().with_origin(self.cur.origin()),
-                    Some(_) => self.value(-1, true)?,
+                    Some(_) => self.value(parent, true)?,
                 }
             } else {
                 ConfigNode::null().with_origin(self.cur.origin())
@@ -834,6 +1001,38 @@ impl Parser<'_> {
 }
 
 // ---- free helpers ---------------------------------------------------------
+
+/// Number of leading spaces of the line at the start of `s`, and the text
+/// after any further whitespace.
+fn line_body(s: &str) -> (usize, &str) {
+    let spaces = s.bytes().take_while(|&b| b == b' ').count();
+    let body = s
+        .get(spaces..)
+        .unwrap_or("")
+        .trim_start_matches([' ', '\t']);
+    (spaces, body)
+}
+
+/// A plain scalar's text as a node: the null forms become `Null`.
+fn plain_node(text: String, origin: Origin) -> ConfigNode {
+    let node = if matches!(text.as_str(), "" | "~" | "null" | "Null" | "NULL") {
+        ConfigNode::null()
+    } else {
+        ConfigNode::scalar(text)
+    };
+    node.with_origin(origin)
+}
+
+/// Plain keys the subset cannot represent: empty (null) keys and merge keys.
+fn check_plain_key(key: &str, origin: &Origin) -> Res<()> {
+    if key.is_empty() {
+        return Err(unsupported_at(origin, "yaml empty mapping keys are not supported"));
+    }
+    if key == "<<" {
+        return Err(unsupported_at(origin, "yaml merge keys (<<) are not supported"));
+    }
+    Ok(())
+}
 
 fn marker_of(s: &str) -> Option<Marker> {
     let kind = if s.starts_with("---") {
@@ -1357,5 +1556,197 @@ star: a*b
             ("port", s("8123")),
         ]);
         assert_eq!(parsed(input), expected);
+    }
+
+    #[test]
+    fn directives_and_empty_keys_are_unsupported() {
+        assert_eq!(
+            failure("%YAML 1.2\n---\na: 1\n"),
+            "unsupported: yaml directives (%) are not supported (<string>:1:1)"
+        );
+        assert_eq!(
+            failure(": a\n"),
+            "unsupported: yaml empty mapping keys are not supported (<string>:1:1)"
+        );
+        assert_eq!(
+            failure("[: x]\n"),
+            "unsupported: yaml empty mapping keys are not supported (<string>:1:2)"
+        );
+        assert_eq!(
+            failure("{ : x }\n"),
+            "unsupported: yaml empty mapping keys are not supported (<string>:1:3)"
+        );
+    }
+
+    #[test]
+    fn flow_sequence_single_pair_entries() {
+        assert_eq!(
+            parsed("[a: b, c, \"d\": e, 'f':g, h:]\n"),
+            arr(vec![
+                map(vec![("a", s("b"))]),
+                s("c"),
+                map(vec![("d", s("e"))]),
+                map(vec![("f", s("g"))]),
+                map(vec![("h", ConfigNode::null())]),
+            ])
+        );
+        assert_eq!(
+            parsed("k: [\n  implicit: value,\n ]\n"),
+            map(vec![("k", arr(vec![map(vec![("implicit", s("value"))])]))])
+        );
+        assert_eq!(
+            failure("[[a]: b]\n"),
+            "unsupported: yaml complex keys (?) are not supported (<string>:1:5)"
+        );
+    }
+
+    #[test]
+    fn flow_key_continues_on_the_line_of_its_colon() {
+        assert_eq!(parsed("{foo\n: bar}\n"), map(vec![("foo", s("bar"))]));
+        assert_eq!(parsed("k: {\n k\n :\n v\n }\n"), map(vec![("k", map(vec![("k", s("v"))]))]));
+    }
+
+    #[test]
+    fn flow_lines_stay_indented_and_inside_the_document() {
+        assert_eq!(
+            failure("a: [x,\ny]\n"),
+            "invalid yaml: flow collection line is not indented deeper than its parent \
+             (<string>:2:1)"
+        );
+        assert_eq!(
+            failure("- [\n\tfoo,\n foo\n ]\n"),
+            "invalid yaml: flow collection line is not indented deeper than its parent \
+             (<string>:2:1)"
+        );
+        assert_eq!(
+            failure("[\n--- ,\n...\n]\n"),
+            "invalid yaml: document marker inside a flow collection (<string>:2:1)"
+        );
+        assert_eq!(parsed("a: [\n  x,\n]\n"), map(vec![("a", arr(vec![s("x")]))]));
+    }
+
+    #[test]
+    fn dash_is_not_a_plain_scalar_in_flow_context() {
+        assert_eq!(
+            failure("[-]\n"),
+            "invalid yaml: block sequence entries are not allowed in this context (<string>:1:2)"
+        );
+        assert_eq!(
+            failure("- [-, -]\n"),
+            "invalid yaml: block sequence entries are not allowed in this context (<string>:1:4)"
+        );
+        assert_eq!(parsed("[-a, -1]\n"), arr(vec![s("-a"), s("-1")]));
+    }
+
+    #[test]
+    fn tabs_separate_but_never_indent() {
+        assert_eq!(parsed("\t[\n\t]\n"), arr(vec![]));
+        assert_eq!(parsed("\t{}\n"), map(vec![]));
+        assert_eq!(parsed("foo:\n \tbar\n"), map(vec![("foo", s("bar"))]));
+        assert_eq!(parsed("a:\tb\n"), map(vec![("a", s("b"))]));
+        assert_eq!(
+            failure("-\t-\n"),
+            "invalid yaml: tabs are not allowed for indentation (<string>:1:3)"
+        );
+        assert_eq!(
+            failure("- \t-\n"),
+            "invalid yaml: tabs are not allowed for indentation (<string>:1:4)"
+        );
+        assert_eq!(
+            failure("a: 1\n\tb: 2\n"),
+            "invalid yaml: tabs are not allowed for indentation (<string>:2:1)"
+        );
+    }
+
+    #[test]
+    fn comments_need_leading_whitespace() {
+        assert_eq!(parsed("a:   # c\n  b\n"), map(vec![("a", s("b"))]));
+        assert_eq!(parsed("- # c\n- x\n"), arr(vec![ConfigNode::null(), s("x")]));
+        for input in ["k: \"v\"# c\n", "[a, b]#c\n", "[a,#c\n b]\n", "k: >#c\n  x\n"] {
+            let message = failure(input);
+            assert!(
+                message.starts_with("invalid yaml: a comment needs whitespace before '#'"),
+                "{input:?}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn block_collections_cannot_start_on_the_document_marker_line() {
+        assert_eq!(
+            failure("--- a: b\n"),
+            "invalid yaml: mapping values are not allowed in this context (<string>:1:6)"
+        );
+        assert_eq!(
+            failure("--- - a\n"),
+            "invalid yaml: block sequence entries are not allowed in this context (<string>:1:5)"
+        );
+        assert_eq!(parsed("--- text\n"), s("text"));
+        assert_eq!(parsed("--- [a]\n"), arr(vec![s("a")]));
+        assert_eq!(parsed("--- |\n x\n"), s("x\n"));
+    }
+
+    #[test]
+    fn quoted_scalars_obey_indentation_markers_and_single_line_keys() {
+        assert_eq!(parsed("a: \"x\n  y\"\n"), map(vec![("a", s("x y"))]));
+        assert_eq!(
+            failure("a: \"x\ny\"\n"),
+            "invalid yaml: continuation line of a quoted scalar is not indented (<string>:2:1)"
+        );
+        assert_eq!(
+            failure("a: \"x\n\ty\"\n"),
+            "invalid yaml: continuation line of a quoted scalar is not indented (<string>:2:1)"
+        );
+        assert_eq!(
+            failure("---\n\"\n---\n\"\n"),
+            "invalid yaml: document marker inside a quoted scalar (<string>:3:1)"
+        );
+        assert_eq!(
+            failure("'\n...\n'\n"),
+            "invalid yaml: document marker inside a quoted scalar (<string>:2:1)"
+        );
+        assert_eq!(
+            failure("\"a\n b\": 1\n"),
+            "invalid yaml: implicit mapping keys must stay on one line (<string>:1:1)"
+        );
+        assert_eq!(
+            failure("- - \"bar\nbar\": x\n"),
+            "invalid yaml: continuation line of a quoted scalar is not indented (<string>:2:1)"
+        );
+    }
+
+    #[test]
+    fn block_scalar_blank_and_whitespace_lines() {
+        assert_eq!(
+            parsed("foo: |\n  x\n   \nbar: 1\n"),
+            map(vec![("foo", s("x\n \n")), ("bar", s("1"))])
+        );
+        assert_eq!(parsed("foo: |\n  x\n   "), map(vec![("foo", s("x\n \n"))]));
+        assert_eq!(parsed("foo: |\n \t\nbar: 1\n"), map(vec![("foo", s("\t\n")), ("bar", s("1"))]));
+        assert_eq!(parsed("- >\n \t\n detected\n"), arr(vec![s("\t\ndetected\n")]));
+        assert_eq!(parsed("--- |+\n ab\n \n  \n...\n"), s("ab\n\n \n"));
+        assert_eq!(parsed("|\n \n  \n  literal\n   \n  \n  text\n"), s("\n\nliteral\n \n\ntext\n"));
+    }
+
+    #[test]
+    fn block_scalar_rejects_bad_leading_blanks_and_tab_lines() {
+        for input in [
+            "a: >\n \n  \n   \n invalid\n",
+            "a: |\n     \n  more\n  text\n",
+            "a: >\n  \n   \n # comment\n",
+        ] {
+            let message = failure(input);
+            assert!(
+                message.starts_with(
+                    "invalid yaml: a leading blank line is indented deeper than the first text \
+                     line"
+                ),
+                "{input:?}: {message}"
+            );
+        }
+        assert_eq!(
+            failure("foo: |\n\t\nbar: 1\n"),
+            "invalid yaml: tabs are not allowed for indentation (<string>:2:1)"
+        );
     }
 }

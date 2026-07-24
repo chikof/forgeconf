@@ -1,5 +1,5 @@
-#![cfg(feature = "toml")]
 //! Loader layer precedence and file handling tests.
+#![cfg(feature = "toml")]
 #![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use std::fs;

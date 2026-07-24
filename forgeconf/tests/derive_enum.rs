@@ -1,5 +1,5 @@
-#![cfg(feature = "toml")]
 //! `#[derive(Config)]` and `FromNode` enum tests.
+#![cfg(feature = "toml")]
 #![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use forgeconf::{Config, ConfigError, ConfigNode, FileFormat, FromNode, from_str};

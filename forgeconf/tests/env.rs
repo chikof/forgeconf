@@ -1,5 +1,5 @@
-#![cfg(feature = "toml")]
 //! Environment variable layer tests.
+#![cfg(feature = "toml")]
 #![allow(clippy::unwrap_used, reason = "tests fail loudly")]
 
 use std::fs;
