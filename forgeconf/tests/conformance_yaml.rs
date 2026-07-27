@@ -421,7 +421,8 @@ fn yaml_suite_rejects_invalid_documents() {
 #[ignore = "conformance suite; run via `test-all`"]
 fn yaml_suite_valid_documents_match_expected_data() {
     let mut failures = Vec::new();
-    let (mut equal, mut unsupported, mut skip_count, mut total) = (0usize, 0usize, 0usize, 0usize);
+    let mut unsupported = Vec::new();
+    let (mut equal, mut skip_count, mut total) = (0usize, 0usize, 0usize);
     for case in cases().iter().filter(|case| !case.invalid) {
         total += 1;
         if skipped(&case.id) {
@@ -437,7 +438,7 @@ fn yaml_suite_valid_documents_match_expected_data() {
         match run(case) {
             Outcome::Panicked => failures.push(format!("{}: parser panicked", case.id)),
             Outcome::NotUtf8 => failures.push(format!("{}: valid case is not UTF-8", case.id)),
-            Outcome::Parsed(Err(err)) if is_unsupported(&err) => unsupported += 1,
+            Outcome::Parsed(Err(err)) if is_unsupported(&err) => unsupported.push(case.id.clone()),
             Outcome::Parsed(Err(err)) => failures.push(format!("{}: rejected: {err}", case.id)),
             Outcome::Parsed(Ok(node)) => {
                 let empty_table = node.as_table().is_some_and(|t| t.is_empty());
@@ -463,9 +464,27 @@ fn yaml_suite_valid_documents_match_expected_data() {
             },
         }
     }
+    // Pinned so a case that regresses from supported to `Unsupported` fails,
+    // and a case that becomes supported must be removed from the list.
+    let pinned: Vec<&str> = include_str!("fixtures/yaml-unsupported.txt")
+        .lines()
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .collect();
+    for id in &unsupported {
+        if !pinned.contains(&id.as_str()) {
+            failures
+                .push(format!("{id}: newly rejected as Unsupported (not in yaml-unsupported.txt)"));
+        }
+    }
+    for id in &pinned {
+        if !unsupported.iter().any(|u| u == id) {
+            failures
+                .push(format!("{id}: listed in yaml-unsupported.txt but no longer Unsupported"));
+        }
+    }
     println!(
-        "yaml valid: {total} cases, {equal} accepted-equal, {unsupported} unsupported, \
-         {skip_count} skipped"
+        "yaml valid: {total} cases, {equal} accepted-equal, {} unsupported, {skip_count} skipped",
+        unsupported.len()
     );
     assert!(
         failures.is_empty(),
