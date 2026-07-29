@@ -1,0 +1,9 @@
+[package]
+name = "fp-figment"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+figment = { version = "0.10.19", features = ["toml", "env"] }

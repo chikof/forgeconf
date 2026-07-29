@@ -1,0 +1,15 @@
+# Comparison benchmarks. Not part of the forgeconf workspace and never
+# published: the competitors pull in serde, which forgeconf itself bans.
+[workspace]
+resolver = "2"
+members = ["runtime", "footprint/*"]
+
+[workspace.package]
+edition = "2024"
+publish = false
+
+[profile.release]
+debug = false
+
+[profile.bench]
+debug = false

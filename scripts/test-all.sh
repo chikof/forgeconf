@@ -6,7 +6,7 @@ set -euo pipefail
 
 cd "$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
 
-steps=(check actionlint msrv features conformance examples coverage)
+steps=(check actionlint msrv features conformance examples benchmarks coverage)
 
 need() {
   [[ -n ${!1:-} ]] || {
@@ -80,6 +80,14 @@ step_examples() {
 step_coverage() {
   # Same threshold as the CI coverage job.
   cargo llvm-cov --workspace --all-features --locked --fail-under-lines 80 --summary-only
+}
+
+step_benchmarks() {
+  # Compiles every comparison bench and runs each once with its correctness
+  # checks; no timing. `scripts/bench.sh` takes the measurements.
+  cargo bench --manifest-path benchmarks/Cargo.toml --locked -p forgeconf-benchmarks \
+    --bench compare -- --test
+  FOOTPRINT_QUICK=1 scripts/bench.sh footprint
 }
 
 selected=("$@")

@@ -58,15 +58,19 @@ in {
 
   dotenv.enable = true;
 
-  # scripts/check.sh is the single gate; scripts/test-all.sh runs everything.
+  # scripts/check.sh is the single gate; scripts/test-all.sh runs everything;
+  # scripts/bench.sh measures forgeconf against other config crates.
   scripts.check.exec = ''
     exec "$DEVENV_ROOT/scripts/check.sh"
   '';
   scripts.test-all.exec = ''
     exec "$DEVENV_ROOT/scripts/test-all.sh" "$@"
   '';
+  scripts.bench.exec = ''
+    exec "$DEVENV_ROOT/scripts/bench.sh" "$@"
+  '';
 
   enterShell = ''
-    echo "forgeconf: run 'check' (gate) or 'test-all' (everything)"
+    echo "forgeconf: run 'check' (gate), 'test-all' (everything) or 'bench'"
   '';
 }

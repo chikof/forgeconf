@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["forgeconf", "forgeconf_macros"]
+# Separate workspace with its own Cargo.lock: the competitors depend on serde,
+# which forgeconf bans from its own graph.
+exclude = ["benchmarks"]
 
 [workspace.lints.rust]
 unsafe_code = "deny"            # allow per module only with a SAFETY comment and review

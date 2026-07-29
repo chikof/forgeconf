@@ -1,0 +1,8 @@
+[package]
+name = "fp-forgeconf-cli"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+forgeconf = { path = "../../../forgeconf", default-features = false, features = ["cli"] }

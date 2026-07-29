@@ -1,0 +1,18 @@
+name: inventory
+debug: false
+features:
+  - search
+  - export
+  - audit
+server:
+  host: 0.0.0.0
+  port: 8080
+  workers: 8
+database:
+  url: postgres://app:secret@db.internal:5432/inventory
+  pool_size: 16
+  timeout_secs: 30
+limits:
+  upload: 1048576
+  requests: 1000
+  sessions: 250

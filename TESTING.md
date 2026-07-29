@@ -34,6 +34,7 @@ The full local gate (format, clippy, docs, tests, dependency and spelling checks
 | `features` | `cargo hack test --feature-powerset` with `-D warnings`: every feature combination builds clean and passes |
 | `conformance` | the official TOML 1.0 (toml-test), JSON (JSONTestSuite) and YAML (yaml-test-suite) suites |
 | `examples` | runs every example and checks the `server` example's help, env, CLI and exit codes |
+| `benchmarks` | builds the comparison benches in `benchmarks/` and runs each once with its correctness checks; no timing (measure with `bench`, see `benchmarks/README.md`) |
 | `coverage` | `cargo llvm-cov`, failing under 80 % lines like CI |
 
 The conformance tests live in `forgeconf/tests/conformance_{toml,json,yaml}.rs` and are `#[ignore]`d because they need the suite checkouts that devenv provides through `FORGECONF_TOML_TEST_DIR`, `FORGECONF_JSON_TEST_DIR` and `FORGECONF_YAML_TEST_DIR`. YAML cases outside the documented subset must fail with an `Unsupported` error; JSON cases with duplicate keys are skipped because forgeconf rejects duplicate keys on purpose.
