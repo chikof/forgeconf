@@ -38,6 +38,8 @@ The footprint crates (`footprint/*`) are minimal binaries that load the fixture 
 
 Recorded on 2026-11-02 with rustc 1.101.0-nightly on a 16-core x86_64 Linux machine. The machine was not idle: load average was 2 to 4 from desktop processes, which is under the core count.
 
+Versions (from `Cargo.lock`): config 0.15.27, figment 0.10.19, confique 0.4.0, serde 1.0.229, toml 1.1.8, serde_json 1.0.154, serde_yaml 0.9.34, clap 4.6.7, criterion 0.8.2.
+
 ### Runtime
 
 Each value is the criterion median in µs, averaged over two full runs. Between the two runs the medians moved by 3.6 % or less, except `yaml/large/serde` (10.5 %). Treat gaps under about 5 % as no measurable difference. The ratio column is relative to forgeconf, so lower than 1.00 means faster than forgeconf.
@@ -102,7 +104,7 @@ Clean release builds, median of five (wall time, 16 parallel jobs) and of three 
 ## Reading the numbers
 
 - **Build time with 16 jobs.** It is nearly the same for everything except figment. Every library compiles `syn` for its derive macro, and that one crate is the longest chain [inference]. The one-job column shows the total compile work, where forgeconf needs about half of what the others need.
-- **JSON.** forgeconf is 2.7 times slower than `serde_json` and about level with figment. forgeconf first builds a `ConfigNode` tree, which allocates a `String` for every value and a map for every table, then converts that tree into the struct. serde_json deserializes straight into the struct [inference: not profiled]. On the 2 µs small document this does not matter at start-up. It is the first place to look if parsing speed ever matters.
+- **JSON.** forgeconf is 2.7 times slower than `serde_json` and about level with figment. A split timing of `json/large` (release build, 5 alternating rounds of 2000 iterations, steady within 4 %) found the following. `parse_str` builds the `ConfigNode` tree in 222 µs, about 83 % of the total, and converting the tree into the struct takes 46 µs. serde_json builds its own `serde_json::Value` tree from the same text in 110 µs. So the limiter is forgeconf's JSON tree construction, not mainly the extra conversion step. Every node allocates its own `String` and carries an `Origin`, and every table is a `BTreeMap`. A sampling profiler could not run here (`perf_event_paranoid` = 2). On the 2 µs small document this does not matter at start-up. It is the first place to look if parsing speed ever matters.
 - **TOML and YAML.** forgeconf is within about 8 % of serde and confique for TOML, and faster than every serde-based option for YAML.
 - **Layered loading.** confique is faster because it reads only the two variables that carry an `env` attribute. forgeconf looks up one variable for every field that `env_prefix` covers (9 here), then merges the layers and checks for deprecated keys. config and figment scan every `APP_*` variable and go through serde's `Value` types.
 - **Errors.** forgeconf reports both problems (the bad value and the unknown key, each with a position). The serde-based libraries stop at the first one, so `errors/report` times different amounts of work.
