@@ -38,6 +38,8 @@ in {
     pkgs.cargo-nextest
     pkgs.cargo-hack
     pkgs.actionlint
+    # deterministic instruction counts for `bench instructions` (perf events are unavailable here)
+    pkgs.valgrind
     pkgs.bacon
     pkgs.git-cliff
     pkgs.cargo-edit

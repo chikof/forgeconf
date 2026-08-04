@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Comparison benchmarks (benchmarks/, a separate cargo workspace).
 #
-#   scripts/bench.sh [runtime|footprint]... [-- <criterion args>]
+#   scripts/bench.sh [runtime|footprint|instructions]... [-- <criterion args>]
 #
 # runtime    criterion run of benchmarks/runtime (args after `--` go to criterion)
 # footprint  clean build time, stripped size and crate count of one minimal
 #            binary per library; every binary is run and verified first, so a
 #            broken binary never gets a number
+# instructions  instructions per iteration of every scenario under callgrind:
+#            deterministic, so small changes show without timing noise; written
+#            to benchmarks/results/instructions.tsv
 #
 # FOOTPRINT_RUNS=N   clean builds per library (default 3)
 # FOOTPRINT_QUICK=1  no timing: incremental build in a shared target dir and
@@ -29,11 +32,42 @@ die() {
 }
 
 usage() {
-  die "usage: scripts/bench.sh [runtime|footprint]... [-- <criterion args>]"
+  die "usage: scripts/bench.sh [runtime|footprint|instructions]... [-- <criterion args>]"
 }
 
 runtime() {
   cargo bench --manifest-path "$MANIFEST" -p forgeconf-benchmarks --bench compare "$@"
+}
+
+SCENARIOS=(
+  toml-small:forgeconf toml-small:serde toml-large:forgeconf toml-large:serde
+  json-small:forgeconf json-small:serde json-large:forgeconf json-large:serde
+  yaml-small:forgeconf yaml-small:serde yaml-large:forgeconf yaml-large:serde
+  layered:forgeconf layered:confique errors:forgeconf errors:serde cli:forgeconf cli:clap
+)
+
+# Instructions one callgrind run of `profile <scenario> <lib> <n>` executes.
+callgrind_ir() {
+  local out
+  out=$(mktemp)
+  valgrind --tool=callgrind --callgrind-out-file="$out" \
+    benchmarks/target/release/profile "$1" "$2" "$3" >/dev/null 2>&1
+  callgrind_annotate "$out" | awk '/PROGRAM TOTALS/ { gsub(",", "", $1); print $1 }'
+  rm -f "$out"
+}
+
+instructions() {
+  local n=${INSTRUCTIONS_ITERS:-200} entry scenario lib base total
+  cargo build --release --locked -q -p forgeconf-benchmarks --bin profile --manifest-path "$MANIFEST"
+  mkdir -p benchmarks/results
+  for entry in "${SCENARIOS[@]}"; do
+    scenario=${entry%%:*}
+    lib=${entry##*:}
+    # Setup (fixture generation, env) is subtracted with a zero-iteration run.
+    base=$(callgrind_ir "$scenario" "$lib" 0)
+    total=$(callgrind_ir "$scenario" "$lib" "$n")
+    printf '%s\t%s\t%d\n' "$scenario" "$lib" $(((total - base) / n))
+  done | tee benchmarks/results/instructions.tsv
 }
 
 # Prints the binary's stdout for the scenario its library is verified with.
@@ -168,6 +202,7 @@ for target in "${targets[@]}"; do
       if ((${#extra[@]})); then runtime -- "${extra[@]}"; else runtime; fi
       ;;
     footprint) footprint ;;
+    instructions) instructions ;;
     *) usage ;;
   esac
 done
