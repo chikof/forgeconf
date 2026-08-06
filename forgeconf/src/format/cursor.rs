@@ -74,25 +74,46 @@ impl<'a> Cursor<'a> {
 
     /// Consume and return the next character.
     pub(crate) fn bump(&mut self) -> Option<char> {
+        let byte = *self.src.as_bytes().get(self.pos)?;
+        if byte.is_ascii() {
+            self.pos += 1;
+            self.step(byte);
+            return Some(char::from(byte));
+        }
         let ch = self.src.get(self.pos..)?.chars().next()?;
         self.pos += ch.len_utf8();
-        if ch == '\n' {
+        self.column += 1;
+        Some(ch)
+    }
+
+    /// Consume the next `len` bytes; `pos() + len` must be a char boundary,
+    /// such as the end of a slice taken from [`Cursor::rest`].
+    pub(crate) fn advance(&mut self, len: usize) {
+        let end = self.pos.saturating_add(len).min(self.src.len());
+        for &byte in &self.src.as_bytes()[self.pos..end] {
+            self.step(byte);
+        }
+        self.pos = end;
+    }
+
+    // UTF-8 continuation bytes do not start a character, so they add no column.
+    fn step(&mut self, byte: u8) {
+        if byte == b'\n' {
             self.line += 1;
             self.column = 1;
-        } else {
+        } else if byte & 0xC0 != 0x80 {
             self.column += 1;
         }
-        Some(ch)
     }
 
     /// Consume `prefix` when the input continues with it.
     pub(crate) fn eat(&mut self, prefix: &str) -> bool {
-        let Some(rest) = self.src.get(self.pos..) else { return false };
-        if !rest.starts_with(prefix) {
+        if !self.rest().starts_with(prefix) {
             return false;
         }
-        for _ in prefix.chars() {
-            self.bump();
+        self.pos += prefix.len();
+        for byte in prefix.bytes() {
+            self.step(byte);
         }
         true
     }
