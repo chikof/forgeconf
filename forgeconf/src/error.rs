@@ -253,51 +253,114 @@ impl ConfigError {
     }
 }
 
-impl Display for ConfigError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ConfigError {
+    fn count_leaves(&self) -> usize {
         match &self.0.kind {
-            ErrorKind::Help(text) => return f.write_str(text),
-            ErrorKind::Multiple(_) => {
-                let leaves: Vec<&ConfigError> = self.errors().collect();
-                write!(f, "{} configuration errors:", leaves.len())?;
-                for leaf in leaves {
-                    write!(f, "\n  - {leaf}")?;
-                }
-                return Ok(());
-            },
-            _ => {},
+            ErrorKind::Multiple(children) => children.iter().map(ConfigError::count_leaves).sum(),
+            _ => 1,
         }
+    }
 
-        let path = self.path();
-        if !path.is_empty() {
-            write!(f, "{path}: ")?;
+    fn fmt_leaves(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.0.kind {
+            ErrorKind::Multiple(children) => {
+                children.iter().try_for_each(|child| child.fmt_leaves(f))
+            },
+            _ => {
+                f.write_str("\n  - ")?;
+                Display::fmt(self, f)
+            },
+        }
+    }
+
+    fn fmt_leaf(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.fmt_path(f)? {
+            f.write_str(": ")?;
         }
         match &self.0.kind {
             ErrorKind::Missing => f.write_str("missing value")?,
             ErrorKind::Mismatch { expected, found } => {
-                write!(f, "expected {expected}, found \"{found}\"")?;
+                f.write_str("expected ")?;
+                f.write_str(expected)?;
+                f.write_str(", found \"")?;
+                f.write_str(found)?;
+                f.write_str("\"")?;
             },
             ErrorKind::Invalid(message) | ErrorKind::Cli(message) => f.write_str(message)?,
             ErrorKind::UnknownKey { suggestion } => {
                 f.write_str("unknown key")?;
                 if let Some(suggestion) = suggestion {
-                    write!(f, ", did you mean \"{suggestion}\"?")?;
+                    f.write_str(", did you mean \"")?;
+                    f.write_str(suggestion)?;
+                    f.write_str("\"?")?;
                 }
             },
             ErrorKind::UnknownVariant { found, expected } => {
-                write!(f, "unknown variant \"{found}\", expected one of: {}", expected.join(", "))?;
+                f.write_str("unknown variant \"")?;
+                f.write_str(found)?;
+                f.write_str("\", expected one of: ")?;
+                for (i, variant) in expected.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    f.write_str(variant)?;
+                }
             },
-            ErrorKind::Syntax { format, message } => write!(f, "invalid {format}: {message}")?,
-            ErrorKind::Unsupported(message) => write!(f, "unsupported: {message}")?,
+            ErrorKind::Syntax { format, message } => {
+                f.write_str("invalid ")?;
+                f.write_str(format)?;
+                f.write_str(": ")?;
+                f.write_str(message)?;
+            },
+            ErrorKind::Unsupported(message) => {
+                f.write_str("unsupported: ")?;
+                f.write_str(message)?;
+            },
             ErrorKind::Io { path, source } => {
                 write!(f, "cannot read {}: {source}", path.display())?;
             },
             ErrorKind::Help(_) | ErrorKind::Multiple(_) => {},
         }
         if let Some(origin) = &self.0.origin {
-            write!(f, " ({origin})")?;
+            f.write_str(" (")?;
+            Display::fmt(origin, f)?;
+            f.write_str(")")?;
         }
         Ok(())
+    }
+
+    /// Write the dotted path; whether anything was written.
+    fn fmt_path(&self, f: &mut Formatter<'_>) -> Result<bool, fmt::Error> {
+        let mut wrote = false;
+        for segment in self.0.path.iter().rev() {
+            match segment {
+                PathSegment::Key(key) => {
+                    if wrote {
+                        f.write_str(".")?;
+                    }
+                    f.write_str(key)?;
+                    wrote |= !key.is_empty();
+                },
+                PathSegment::Index(index) => {
+                    write!(f, "[{index}]")?;
+                    wrote = true;
+                },
+            }
+        }
+        Ok(wrote)
+    }
+}
+
+impl Display for ConfigError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.0.kind {
+            ErrorKind::Help(text) => f.write_str(text),
+            ErrorKind::Multiple(_) => {
+                write!(f, "{} configuration errors:", self.count_leaves())?;
+                self.fmt_leaves(f)
+            },
+            _ => self.fmt_leaf(f),
+        }
     }
 }
 
