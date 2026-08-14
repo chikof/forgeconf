@@ -323,7 +323,13 @@ impl ConfigError {
         }
         if let Some(origin) = &self.0.origin {
             f.write_str(" (")?;
-            Display::fmt(origin, f)?;
+            f.write_str(origin.source())?;
+            if origin.line() != 0 {
+                f.write_str(":")?;
+                fmt_decimal(f, origin.line() as usize)?;
+                f.write_str(":")?;
+                fmt_decimal(f, origin.column() as usize)?;
+            }
             f.write_str(")")?;
         }
         Ok(())
@@ -342,7 +348,9 @@ impl ConfigError {
                     wrote |= !key.is_empty();
                 },
                 PathSegment::Index(index) => {
-                    write!(f, "[{index}]")?;
+                    f.write_str("[")?;
+                    fmt_decimal(f, *index)?;
+                    f.write_str("]")?;
                     wrote = true;
                 },
             }
@@ -356,12 +364,28 @@ impl Display for ConfigError {
         match &self.0.kind {
             ErrorKind::Help(text) => f.write_str(text),
             ErrorKind::Multiple(_) => {
-                write!(f, "{} configuration errors:", self.count_leaves())?;
+                fmt_decimal(f, self.count_leaves())?;
+                f.write_str(" configuration errors:")?;
                 self.fmt_leaves(f)
             },
             _ => self.fmt_leaf(f),
         }
     }
+}
+
+/// `Display` for an unsigned integer without the `fmt::Arguments` machinery.
+fn fmt_decimal(f: &mut Formatter<'_>, mut n: usize) -> fmt::Result {
+    let mut buf = [0u8; 20];
+    let mut start = buf.len();
+    loop {
+        start -= 1;
+        buf[start] = b"0123456789"[n % 10];
+        n /= 10;
+        if n == 0 {
+            break;
+        }
+    }
+    f.write_str(std::str::from_utf8(&buf[start..]).map_err(|_| fmt::Error)?)
 }
 
 // Debug prints the Display text so `fn main() -> Result<(), ConfigError>` shows
