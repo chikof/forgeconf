@@ -33,7 +33,48 @@ fn distance_within(
     bound: usize,
     rows: &mut Vec<usize>,
 ) -> Option<usize> {
-    let b_len = b.chars().count();
+    if a.is_ascii() && b.is_ascii() {
+        if bound <= 1 {
+            return within_one(a.as_bytes(), b.as_bytes(), bound);
+        }
+        within(a.bytes(), a_len, b.bytes(), b.len(), bound, rows)
+    } else {
+        within(a.chars(), a_len, b.chars(), b.chars().count(), bound, rows)
+    }
+}
+
+/// `distance_within` for `bound <= 1`: one edit leaves a single differing
+/// region between the common prefix and suffix, so no table is needed.
+fn within_one(a: &[u8], b: &[u8], bound: usize) -> Option<usize> {
+    if a == b {
+        return Some(0);
+    }
+    if bound == 0 {
+        return None;
+    }
+    let prefix = a.iter().zip(b).take_while(|(x, y)| x == y).count();
+    let (a, b) = (&a[prefix..], &b[prefix..]);
+    let suffix = a
+        .iter()
+        .rev()
+        .zip(b.iter().rev())
+        .take_while(|(x, y)| x == y)
+        .count();
+    match (&a[..a.len() - suffix], &b[..b.len() - suffix]) {
+        ([_], [_] | []) | ([], [_]) => Some(1),
+        ([x, y], [u, v]) if x == v && y == u => Some(1),
+        _ => None,
+    }
+}
+
+fn within<T: Copy + PartialEq>(
+    a: impl Iterator<Item = T>,
+    a_len: usize,
+    b: impl Iterator<Item = T> + Clone,
+    b_len: usize,
+    bound: usize,
+    rows: &mut Vec<usize>,
+) -> Option<usize> {
     if a_len.abs_diff(b_len) > bound {
         return None;
     }
@@ -48,27 +89,27 @@ fn distance_within(
     // Every cell of a row is at least the smaller of the two rows above it,
     // so once both exceed `bound` the final distance does too.
     let mut previous_min = 0;
-    let mut previous_a = '\0';
-    for (i, ca) in a.chars().enumerate() {
+    let mut previous_a = None;
+    for (i, ca) in a.enumerate() {
         row[0] = i + 1;
         let mut row_min = i + 1;
-        let mut previous_b = '\0';
-        for (j, cb) in b.chars().enumerate() {
+        let mut previous_b = None;
+        for (j, cb) in b.clone().enumerate() {
             let mut best = (previous[j] + usize::from(ca != cb))
                 .min(previous[j + 1] + 1)
                 .min(row[j] + 1);
-            if i > 0 && j > 0 && ca == previous_b && previous_a == cb {
+            if j > 0 && previous_b == Some(ca) && previous_a == Some(cb) {
                 best = best.min(older[j - 1] + 1);
             }
             row[j + 1] = best;
             row_min = row_min.min(best);
-            previous_b = cb;
+            previous_b = Some(cb);
         }
         if row_min > bound && previous_min > bound {
             return None;
         }
         previous_min = row_min;
-        previous_a = ca;
+        previous_a = Some(ca);
         std::mem::swap(&mut older, &mut previous);
         std::mem::swap(&mut previous, &mut row);
     }
@@ -113,5 +154,31 @@ mod test {
         };
         assert_eq!((d("", ""), d("abc", ""), d("", "abc")), (0, 3, 3));
         assert_eq!((d("kitten", "sitting"), d("xy", "yx"), d("ca", "abc")), (3, 1, 3));
+    }
+
+    #[test]
+    fn linear_path_agrees_with_the_table() {
+        let mut words = vec![String::new()];
+        let mut from = 0;
+        for _ in 0..5 {
+            let to = words.len();
+            for i in from..to {
+                for c in ["a", "b", "c"] {
+                    words.push(format!("{}{c}", words[i]));
+                }
+            }
+            from = to;
+        }
+        let mut rows = Vec::new();
+        for a in &words {
+            for b in &words {
+                let table = within(a.bytes(), a.len(), b.bytes(), b.len(), usize::MAX, &mut rows)
+                    .filter(|d| *d <= 1);
+                for bound in [0, 1] {
+                    let want = table.filter(|d| *d <= bound);
+                    assert_eq!(within_one(a.as_bytes(), b.as_bytes(), bound), want, "{a} {b}");
+                }
+            }
+        }
     }
 }
