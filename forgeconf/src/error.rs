@@ -1,7 +1,7 @@
 //! Error types for forgeconf.
 
 use std::borrow::Cow;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Display, Formatter, Write as _};
 use std::io;
 use std::path::PathBuf;
 
@@ -284,7 +284,7 @@ impl ConfigError {
                 f.write_str(expected)?;
                 f.write_str(", found \"")?;
                 f.write_str(found)?;
-                f.write_str("\"")?;
+                f.write_char('"')?;
             },
             ErrorKind::Invalid(message) | ErrorKind::Cli(message) => f.write_str(message)?,
             ErrorKind::UnknownKey { suggestion } => {
@@ -325,12 +325,12 @@ impl ConfigError {
             f.write_str(" (")?;
             f.write_str(origin.source())?;
             if origin.line() != 0 {
-                f.write_str(":")?;
+                f.write_char(':')?;
                 fmt_decimal(f, origin.line() as usize)?;
-                f.write_str(":")?;
+                f.write_char(':')?;
                 fmt_decimal(f, origin.column() as usize)?;
             }
-            f.write_str(")")?;
+            f.write_char(')')?;
         }
         Ok(())
     }
@@ -342,15 +342,15 @@ impl ConfigError {
             match segment {
                 PathSegment::Key(key) => {
                     if wrote {
-                        f.write_str(".")?;
+                        f.write_char('.')?;
                     }
                     f.write_str(key)?;
                     wrote |= !key.is_empty();
                 },
                 PathSegment::Index(index) => {
-                    f.write_str("[")?;
+                    f.write_char('[')?;
                     fmt_decimal(f, *index)?;
-                    f.write_str("]")?;
+                    f.write_char(']')?;
                     wrote = true;
                 },
             }
@@ -375,6 +375,9 @@ impl Display for ConfigError {
 
 /// `Display` for an unsigned integer without the `fmt::Arguments` machinery.
 fn fmt_decimal(f: &mut Formatter<'_>, mut n: usize) -> fmt::Result {
+    if let Ok(digit @ 0..=9) = u8::try_from(n) {
+        return f.write_char(char::from(b'0' + digit));
+    }
     let mut buf = [0u8; 20];
     let mut start = buf.len();
     loop {

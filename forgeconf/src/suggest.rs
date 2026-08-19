@@ -37,9 +37,9 @@ fn distance_within(
         if bound <= 1 {
             return within_one(a.as_bytes(), b.as_bytes(), bound);
         }
-        within(a.bytes(), a_len, b.bytes(), b.len(), bound, rows)
+        within(a.bytes(), a_len, &b.bytes(), b.len(), bound, rows)
     } else {
-        within(a.chars(), a_len, b.chars(), b.chars().count(), bound, rows)
+        within(a.chars(), a_len, &b.chars(), b.chars().count(), bound, rows)
     }
 }
 
@@ -70,7 +70,7 @@ fn within_one(a: &[u8], b: &[u8], bound: usize) -> Option<usize> {
 fn within<T: Copy + PartialEq>(
     a: impl Iterator<Item = T>,
     a_len: usize,
-    b: impl Iterator<Item = T> + Clone,
+    b: &(impl Iterator<Item = T> + Clone),
     b_len: usize,
     bound: usize,
     rows: &mut Vec<usize>,
@@ -172,7 +172,7 @@ mod test {
         let mut rows = Vec::new();
         for a in &words {
             for b in &words {
-                let table = within(a.bytes(), a.len(), b.bytes(), b.len(), usize::MAX, &mut rows)
+                let table = within(a.bytes(), a.len(), &b.bytes(), b.len(), usize::MAX, &mut rows)
                     .filter(|d| *d <= 1);
                 for bound in [0, 1] {
                     let want = table.filter(|d| *d <= bound);
