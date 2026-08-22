@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use crate::suggest::suggest;
-use crate::{ConfigError, ConfigNode, ErrorKind, FromNode, PathSegment, Shape, Table, Warning};
+use crate::{ConfigError, ConfigNode, ErrorKind, FromNode, Shape, Table, Warning};
 
 /// The table behind `node`; null stands for an empty table so a struct whose
 /// fields all have defaults loads from nothing.
@@ -137,10 +137,53 @@ pub fn scalar<'a>(node: &'a ConfigNode, expected: &'static str) -> Result<&'a st
 
 /// Append a [`Warning`] for every present deprecated key under `node`.
 pub fn collect_deprecations(node: &ConfigNode, shape: Shape, out: &mut Vec<Warning>) {
-    walk(node, shape, &mut Vec::new(), out);
+    walk(node, shape, &Path::Root, out);
 }
 
-fn walk(node: &ConfigNode, shape: Shape, path: &mut Vec<PathSegment>, out: &mut Vec<Warning>) {
+/// The keys and indices from the root down to the node being visited, as a
+/// chain of stack frames: it allocates nothing until a warning needs its text.
+enum Path<'a> {
+    Root,
+    Key(&'a Path<'a>, &'a str),
+    Index(&'a Path<'a>, usize),
+}
+
+impl Path<'_> {
+    /// Same format as [`ConfigError::path`]: `servers[2].host`.
+    fn render(&self) -> String {
+        let mut chain = Vec::new();
+        let mut at = self;
+        while let Self::Key(parent, _) | Self::Index(parent, _) = at {
+            chain.push(at);
+            at = parent;
+        }
+        let mut out = String::new();
+        for segment in chain.into_iter().rev() {
+            match segment {
+                Self::Key(_, key) => {
+                    if !out.is_empty() {
+                        out.push('.');
+                    }
+                    out.push_str(key);
+                },
+                Self::Index(_, index) => out.push_str(&format!("[{index}]")),
+                Self::Root => {},
+            }
+        }
+        out
+    }
+}
+
+/// Whether values of `shape` can hold fields that carry a deprecation.
+fn has_fields(shape: Shape) -> bool {
+    match shape {
+        Shape::Struct(_) => true,
+        Shape::Optional(inner) | Shape::List(inner) | Shape::Map(inner) => has_fields(inner()),
+        _ => false,
+    }
+}
+
+fn walk(node: &ConfigNode, shape: Shape, path: &Path<'_>, out: &mut Vec<Warning>) {
     match shape {
         Shape::Struct(info) => {
             let Some(table) = node.as_table() else { return };
@@ -149,62 +192,47 @@ fn walk(node: &ConfigNode, shape: Shape, path: &mut Vec<PathSegment>, out: &mut 
                     walk(node, field.shape(), path, out);
                     continue;
                 }
-                let keys: Vec<&str> = std::iter::once(field.key())
+                let Some((key, child)) = std::iter::once(field.key())
                     .chain(field.alias_keys().iter().copied())
-                    .collect();
-                let Some(key) = keys
-                    .iter()
-                    .find(|key| table.get(**key).is_some_and(|child| !child.is_null()))
+                    .find_map(|key| {
+                        table
+                            .get(key)
+                            .filter(|child| !child.is_null())
+                            .map(|child| (key, child))
+                    })
                 else {
                     continue;
                 };
-                let child = &table[*key];
-                path.push(PathSegment::Key((*key).to_owned()));
+                let path = Path::Key(path, key);
                 if let Some(message) = field.deprecation() {
-                    out.push(Warning::new(render(path), message, child.origin().cloned()));
+                    out.push(Warning::new(path.render(), message, child.origin().cloned()));
                 }
-                walk(child, field.shape(), path, out);
-                path.pop();
+                walk(child, field.shape(), &path, out);
             }
         },
         Shape::Optional(inner) => walk(node, inner(), path, out),
         Shape::List(inner) => {
             let Some(items) = node.as_array() else { return };
             let inner = inner();
+            if !has_fields(inner) {
+                return;
+            }
             for (index, item) in items.iter().enumerate() {
-                path.push(PathSegment::Index(index));
-                walk(item, inner, path, out);
-                path.pop();
+                walk(item, inner, &Path::Index(path, index), out);
             }
         },
         Shape::Map(inner) => {
             let Some(table) = node.as_table() else { return };
             let inner = inner();
+            if !has_fields(inner) {
+                return;
+            }
             for (key, value) in table {
-                path.push(PathSegment::Key(key.clone()));
-                walk(value, inner, path, out);
-                path.pop();
+                walk(value, inner, &Path::Key(path, key), out);
             }
         },
         _ => {},
     }
-}
-
-/// Same format as [`ConfigError::path`]: `servers[2].host`.
-fn render(path: &[PathSegment]) -> String {
-    let mut out = String::new();
-    for segment in path {
-        match segment {
-            PathSegment::Key(key) => {
-                if !out.is_empty() {
-                    out.push('.');
-                }
-                out.push_str(key);
-            },
-            PathSegment::Index(index) => out.push_str(&format!("[{index}]")),
-        }
-    }
-    out
 }
 
 #[cfg(test)]

@@ -20,41 +20,101 @@ pub(crate) struct Leaf {
 /// and enums with data are skipped: a flat string cannot describe them.
 pub(crate) fn leaves(shape: Shape) -> Vec<Leaf> {
     let mut out = Vec::new();
-    if let Shape::Struct(info) = shape {
-        let mut path = Vec::new();
-        walk(info.fields(), info.prefix(), &mut path, &mut out);
-    }
+    let walked: Result<(), std::convert::Infallible> =
+        visit(shape, true, &mut |path, field, shape, env| {
+            out.push(Leaf {
+                path: path.to_vec(),
+                field,
+                shape,
+                env: env.map(str::to_owned),
+            });
+            Ok(())
+        });
+    walked.unwrap_or(());
     out
 }
 
-fn walk(
-    fields: &'static [FieldInfo],
-    prefix: Option<&'static str>,
-    path: &mut Vec<&'static str>,
-    out: &mut Vec<Leaf>,
-) {
-    for field in fields {
-        let shape = unwrap_optional(field.shape());
-        if let Shape::Struct(info) = shape {
-            if !field.is_flatten() {
-                path.push(field.key());
+/// Call `f(path, field, shape, env)` for every leaf of `shape`, like
+/// [`leaves`] but without allocating per leaf. `env` is the variable name:
+/// the field's `env`, else the root prefix plus the path; `None` when `names`
+/// is false or the field has neither. It is only valid during the call.
+pub(crate) fn visit<E>(
+    shape: Shape,
+    names: bool,
+    f: &mut impl FnMut(&[&'static str], &'static FieldInfo, Shape, Option<&str>) -> Result<(), E>,
+) -> Result<(), E> {
+    let Shape::Struct(info) = shape else { return Ok(()) };
+    let mut name = String::new();
+    let prefixed = names && info.prefix().is_some();
+    if let (true, Some(prefix)) = (prefixed, info.prefix()) {
+        name.reserve(64);
+        push_mapped(&mut name, prefix);
+    }
+    let mut walker = Walker {
+        path: Vec::with_capacity(8),
+        name,
+        prefixed,
+        f,
+    };
+    walker.fields(info.fields())
+}
+
+struct Walker<'f, F> {
+    path: Vec<&'static str>,
+    /// Prefix plus the mapped path so far; kept only when `prefixed`.
+    name: String,
+    prefixed: bool,
+    f: &'f mut F,
+}
+
+impl<F, E> Walker<'_, F>
+where
+    F: FnMut(&[&'static str], &'static FieldInfo, Shape, Option<&str>) -> Result<(), E>,
+{
+    fn fields(&mut self, fields: &'static [FieldInfo]) -> Result<(), E> {
+        for field in fields {
+            let shape = unwrap_optional(field.shape());
+            if let Shape::Struct(info) = shape {
+                if field.is_flatten() {
+                    self.fields(info.fields())?;
+                } else {
+                    let mark = self.push(field.key());
+                    self.fields(info.fields())?;
+                    self.pop(mark);
+                }
+                continue;
             }
-            walk(info.fields(), prefix, path, out);
-            if !field.is_flatten() {
-                path.pop();
+            if !is_leaf(shape) {
+                continue;
             }
-            continue;
+            let mark = self.push(field.key());
+            let env = match field.env_var() {
+                Some(name) => Some(name),
+                None if self.prefixed => Some(self.name.as_str()),
+                None => None,
+            };
+            (self.f)(&self.path, field, shape, env)?;
+            self.pop(mark);
         }
-        if !is_leaf(shape) {
-            continue;
+        Ok(())
+    }
+
+    /// Descend into `key`; returns what [`pop`](Self::pop) needs to undo it.
+    fn push(&mut self, key: &'static str) -> usize {
+        self.path.push(key);
+        let mark = self.name.len();
+        if self.prefixed {
+            if self.path.len() > 1 {
+                self.name.push('_');
+            }
+            push_mapped(&mut self.name, key);
         }
-        path.push(field.key());
-        let env = match field.env_var() {
-            Some(name) => Some(name.to_owned()),
-            None => prefix.map(|prefix| env_name(prefix, path)),
-        };
-        out.push(Leaf { path: path.clone(), field, shape, env });
-        path.pop();
+        mark
+    }
+
+    fn pop(&mut self, mark: usize) {
+        self.path.pop();
+        self.name.truncate(mark);
     }
 }
 
@@ -80,17 +140,12 @@ fn is_scalar(shape: Shape) -> bool {
     }
 }
 
-fn env_name(prefix: &str, path: &[&str]) -> String {
-    let mut name = String::from(prefix);
-    for (i, segment) in path.iter().enumerate() {
-        if i > 0 {
-            name.push('_');
-        }
-        name.push_str(segment);
+/// Append `text` upper-cased, every character that is not ASCII alphanumeric
+/// replaced by `_`.
+fn push_mapped(out: &mut String, text: &str) {
+    for c in text.chars() {
+        out.push(if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' });
     }
-    name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' })
-        .collect()
 }
 
 #[cfg(test)]

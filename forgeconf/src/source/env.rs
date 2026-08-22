@@ -2,7 +2,7 @@
 
 use std::ffi::OsString;
 
-use super::walk::{self, Leaf};
+use super::walk;
 use crate::{ConfigError, ConfigNode, Origin, Shape, Table};
 
 /// A node tree with one scalar per leaf whose variable `vars` knows.
@@ -14,28 +14,30 @@ pub(crate) fn env_node(
     vars: &dyn Fn(&str) -> Option<Result<String, OsString>>,
 ) -> Result<ConfigNode, ConfigError> {
     let mut root = Table::new();
-    for leaf in walk::leaves(shape) {
-        let Some(name) = leaf.env.as_deref() else { continue };
-        let Some(value) = vars(name) else { continue };
-        let node = match value {
-            Ok(text) => leaf_node(&leaf, name, &text),
+    walk::visit(shape, true, &mut |path, _, leaf_shape, env| {
+        let Some(name) = env else { return Ok(()) };
+        let Some(value) = vars(name) else { return Ok(()) };
+        match value {
+            Ok(text) => {
+                insert(&mut root, path, leaf_node(leaf_shape, name, &text));
+                Ok(())
+            },
             Err(_) => {
                 let mut err =
                     ConfigError::invalid(format!("environment variable {name} is not valid UTF-8"));
-                for key in leaf.path.iter().rev() {
+                for key in path.iter().rev() {
                     err = err.at_key(key);
                 }
-                return Err(err);
+                Err(err)
             },
-        };
-        insert(&mut root, &leaf.path, node);
-    }
+        }
+    })?;
     Ok(ConfigNode::table(root))
 }
 
-fn leaf_node(leaf: &Leaf, name: &str, text: &str) -> ConfigNode {
+fn leaf_node(shape: Shape, name: &str, text: &str) -> ConfigNode {
     let origin = Origin::new(format!("env:{name}"), 0, 0);
-    if matches!(leaf.shape, Shape::List(_)) {
+    if matches!(shape, Shape::List(_)) {
         let items = if text.is_empty() {
             Vec::new()
         } else {
