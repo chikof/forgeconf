@@ -192,6 +192,9 @@ fn walk(node: &ConfigNode, shape: Shape, path: &Path<'_>, out: &mut Vec<Warning>
                     walk(node, field.shape(), path, out);
                     continue;
                 }
+                if field.deprecation().is_none() && !has_fields(field.shape()) {
+                    continue;
+                }
                 let Some((key, child)) = std::iter::once(field.key())
                     .chain(field.alias_keys().iter().copied())
                     .find_map(|key| {

@@ -10,6 +10,7 @@ pub(crate) fn merge(base: &mut ConfigNode, overlay: ConfigNode) {
         return;
     }
     match (&mut base.value, overlay.value) {
+        (Value::Table(left), Value::Table(right)) if left.is_empty() => *left = right,
         (Value::Table(left), Value::Table(right)) => {
             for (key, value) in right {
                 match left.get_mut(&key) {

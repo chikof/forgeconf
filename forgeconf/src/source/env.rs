@@ -14,12 +14,16 @@ pub(crate) fn env_node(
     vars: &dyn Fn(&str) -> Option<Result<String, OsString>>,
 ) -> Result<ConfigNode, ConfigError> {
     let mut root = Table::new();
+    let mut label = String::new();
     walk::visit(shape, true, &mut |path, _, leaf_shape, env| {
         let Some(name) = env else { return Ok(()) };
         let Some(value) = vars(name) else { return Ok(()) };
         match value {
             Ok(text) => {
-                insert(&mut root, path, leaf_node(leaf_shape, name, &text));
+                label.clear();
+                label.push_str("env:");
+                label.push_str(name);
+                insert(&mut root, path, leaf_node(leaf_shape, &label, &text));
                 Ok(())
             },
             Err(_) => {
@@ -35,8 +39,8 @@ pub(crate) fn env_node(
     Ok(ConfigNode::table(root))
 }
 
-fn leaf_node(shape: Shape, name: &str, text: &str) -> ConfigNode {
-    let origin = Origin::new(format!("env:{name}"), 0, 0);
+fn leaf_node(shape: Shape, label: &str, text: &str) -> ConfigNode {
+    let origin = Origin::new(label, 0, 0);
     if matches!(shape, Shape::List(_)) {
         let items = if text.is_empty() {
             Vec::new()
