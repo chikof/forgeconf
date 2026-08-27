@@ -72,7 +72,7 @@ pub(crate) fn load_from_path(
         Some(format) => format,
         None => infer_from_extension(path)?,
     };
-    parse_source(&contents, format, &path.display().to_string())
+    parse_source(&contents, format, &path.to_string_lossy())
 }
 
 /// Parse an in-memory string. Origins name the source `<string>`.
