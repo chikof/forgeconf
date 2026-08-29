@@ -5,6 +5,7 @@
 //! [`ConfigNode`] deliberately lacks. Inline tables and static arrays are
 //! already finished nodes ([`Slot::Leaf`]), so nothing can extend them.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
@@ -156,7 +157,7 @@ enum Mode {
 /// Step into the child table `key.part(i)`, creating it when missing.
 fn descend<'t>(
     cur: &'t mut TableSlot,
-    key: &Key,
+    key: &Key<'_>,
     i: usize,
     mode: Mode,
 ) -> Result<&'t mut TableSlot, ConfigError> {
@@ -167,7 +168,7 @@ fn descend<'t>(
     };
     let slot = cur
         .entries
-        .entry(part.name.clone())
+        .entry(String::from(&*part.name))
         .or_insert_with(|| Slot::Table(TableSlot::new(part.origin.clone(), created)));
     match slot {
         Slot::Table(table) => {
@@ -215,14 +216,14 @@ fn leaf_error(origin: &Origin, path: &str, node: &ConfigNode) -> ConfigError {
     error_at(origin, message)
 }
 
-fn apply_header(root: &mut TableSlot, key: &Key, is_array: bool) -> Result<(), ConfigError> {
+fn apply_header(root: &mut TableSlot, key: &Key<'_>, is_array: bool) -> Result<(), ConfigError> {
     let mut cur = root;
     for i in 0..key.parents.len() {
         cur = descend(cur, key, i, Mode::Header)?;
     }
     let last = &key.last;
     let path = || key.prefix(key.len());
-    match cur.entries.entry(last.name.clone()) {
+    match cur.entries.entry(String::from(&*last.name)) {
         Entry::Vacant(slot) => {
             let table = TableSlot::new(last.origin.clone(), State::Header);
             slot.insert(if is_array {
@@ -270,14 +271,14 @@ fn apply_header(root: &mut TableSlot, key: &Key, is_array: bool) -> Result<(), C
 
 fn insert_key_value(
     table: &mut TableSlot,
-    key: &Key,
+    key: &Key<'_>,
     value: ConfigNode,
 ) -> Result<(), ConfigError> {
     let mut cur = table;
     for i in 0..key.parents.len() {
         cur = descend(cur, key, i, Mode::Dotted)?;
     }
-    match cur.entries.entry(key.last.name.clone()) {
+    match cur.entries.entry(String::from(&*key.last.name)) {
         Entry::Occupied(_) => {
             Err(error_at(&key.last.origin, format!("duplicate key \"{}\"", key.prefix(key.len()))))
         },
@@ -297,23 +298,23 @@ fn error_at(origin: &Origin, message: impl Into<String>) -> ConfigError {
 // Keys and headers
 // ---------------------------------------------------------------------------
 
-struct KeyPart {
-    name: String,
+struct KeyPart<'a> {
+    name: Cow<'a, str>,
     origin: Origin,
 }
 
 /// A possibly dotted key; `parents` are the parts before the last one.
-struct Key {
-    parents: Vec<KeyPart>,
-    last: KeyPart,
+struct Key<'a> {
+    parents: Vec<KeyPart<'a>>,
+    last: KeyPart<'a>,
 }
 
-impl Key {
+impl Key<'_> {
     fn len(&self) -> usize {
         self.parents.len() + 1
     }
 
-    fn part(&self, i: usize) -> &KeyPart {
+    fn part(&self, i: usize) -> &KeyPart<'_> {
         self.parents.get(i).unwrap_or(&self.last)
     }
 
@@ -324,7 +325,7 @@ impl Key {
             .iter()
             .chain(Some(&self.last))
             .take(n)
-            .map(|p| p.name.as_str())
+            .map(|p| &*p.name)
             .collect();
         names.join(".")
     }
@@ -333,12 +334,12 @@ impl Key {
         self.parents
             .iter()
             .chain(Some(&self.last))
-            .map(|p| p.name.clone())
+            .map(|p| String::from(&*p.name))
             .collect()
     }
 }
 
-fn parse_key(c: &mut Cursor<'_>) -> Result<Key, ConfigError> {
+fn parse_key<'a>(c: &mut Cursor<'a>) -> Result<Key<'a>, ConfigError> {
     let mut parents = Vec::new();
     let mut current = parse_key_part(c)?;
     loop {
@@ -357,29 +358,29 @@ fn parse_key(c: &mut Cursor<'_>) -> Result<Key, ConfigError> {
     Ok(Key { parents, last: current })
 }
 
-fn parse_key_part(c: &mut Cursor<'_>) -> Result<KeyPart, ConfigError> {
+fn parse_key_part<'a>(c: &mut Cursor<'a>) -> Result<KeyPart<'a>, ConfigError> {
     skip_ws(c);
     let origin = c.origin();
     let name = match c.peek() {
         Some(b'"') => basic_string(c)?,
         Some(b'\'') => literal_string(c)?,
-        Some(b) if b.is_ascii_alphanumeric() || b == b'_' || b == b'-' => {
-            let start = c.pos();
-            while c
-                .peek()
-                .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-            {
-                c.bump();
-            }
-            c.slice_from(start).to_owned()
+        Some(b) if is_bare_key(b) => {
+            let rest = c.rest();
+            let n = rest.bytes().take_while(|&b| is_bare_key(b)).count();
+            c.advance(n);
+            Cow::Borrowed(rest.get(..n).unwrap_or(""))
         },
         _ => return Err(c.error(FORMAT, "expected a key")),
     };
     Ok(KeyPart { name, origin })
 }
 
+fn is_bare_key(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
+}
+
 /// Parse `[key]` or `[[key]]`; the flag is true for an array of tables.
-fn parse_header(c: &mut Cursor<'_>) -> Result<(Key, bool), ConfigError> {
+fn parse_header<'a>(c: &mut Cursor<'a>) -> Result<(Key<'a>, bool), ConfigError> {
     let is_array = c.eat("[[");
     if !is_array {
         c.bump();
@@ -399,8 +400,13 @@ fn parse_header(c: &mut Cursor<'_>) -> Result<(Key, bool), ConfigError> {
 // ---------------------------------------------------------------------------
 
 fn skip_ws(c: &mut Cursor<'_>) {
-    while matches!(c.peek(), Some(b' ' | b'\t')) {
-        c.bump();
+    let n = c
+        .rest()
+        .bytes()
+        .take_while(|b| matches!(b, b' ' | b'\t'))
+        .count();
+    if n > 0 {
+        c.advance(n);
     }
 }
 
@@ -423,16 +429,17 @@ fn is_control(ch: char) -> bool {
 
 /// Consume a comment up to, not including, the line break.
 fn skip_comment(c: &mut Cursor<'_>) -> Result<(), ConfigError> {
-    while let Some(ch) = peek_char(c) {
-        if at_newline(c) || ch == '\n' {
-            break;
-        }
-        if is_control(ch) {
-            return Err(c.error(FORMAT, "control character in comment"));
-        }
-        c.bump();
+    let n = c
+        .rest()
+        .bytes()
+        .position(|b| b == b'\n' || (b < b' ' && b != b'\t') || b == 0x7f)
+        .unwrap_or(c.rest().len());
+    c.advance(n);
+    if c.peek().is_none_or(|b| b == b'\n') || at_newline(c) {
+        Ok(())
+    } else {
+        Err(c.error(FORMAT, "control character in comment"))
     }
-    Ok(())
 }
 
 fn skip_ws_newlines_comments(c: &mut Cursor<'_>) -> Result<(), ConfigError> {
@@ -471,15 +478,18 @@ fn parse_value(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
     let origin = c.origin();
     let node = match c.peek() {
         Some(b'"') => {
-            let text =
-                if c.rest().starts_with("\"\"\"") { ml_basic_string(c)? } else { basic_string(c)? };
+            let text = if c.rest().starts_with("\"\"\"") {
+                ml_basic_string(c)?
+            } else {
+                basic_string(c)?.into_owned()
+            };
             ConfigNode::scalar(text)
         },
         Some(b'\'') => {
             let text = if c.rest().starts_with("'''") {
                 ml_literal_string(c)?
             } else {
-                literal_string(c)?
+                literal_string(c)?.into_owned()
             };
             ConfigNode::scalar(text)
         },
@@ -586,51 +596,66 @@ fn take_token(c: &mut Cursor<'_>) {
 // Strings
 // ---------------------------------------------------------------------------
 
-fn basic_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
-    c.bump();
-    let mut out = String::new();
-    loop {
-        let Some(ch) = peek_char(c) else {
-            return Err(c.error(FORMAT, "unterminated string"));
-        };
-        match ch {
-            '"' => {
-                c.bump();
-                return Ok(out);
-            },
-            '\\' => {
-                c.bump();
-                out.push(escape(c)?);
-            },
-            '\n' | '\r' => return Err(c.error(FORMAT, "newline in single-line string")),
-            ch if is_control(ch) => return Err(c.error(FORMAT, "control character in string")),
-            _ => {
-                c.bump();
-                out.push(ch);
-            },
-        }
+/// Length of the run of bytes that can be copied verbatim: everything up to
+/// the closing `quote`, a backslash when `escapes` is set, or a control
+/// character other than tab.
+fn plain_run(rest: &str, quote: u8, escapes: bool) -> usize {
+    rest.bytes()
+        .position(|b| {
+            b == quote || (escapes && b == b'\\') || (b < b' ' && b != b'\t') || b == 0x7f
+        })
+        .unwrap_or(rest.len())
+}
+
+/// Consume the plain run at the cursor and return it.
+fn take_plain_run<'a>(c: &mut Cursor<'a>, quote: u8, escapes: bool) -> &'a str {
+    let rest = c.rest();
+    let n = plain_run(rest, quote, escapes);
+    c.advance(n);
+    rest.get(..n).unwrap_or("")
+}
+
+/// Error for the byte that ended a plain run inside a single-line string.
+fn string_stop(c: &Cursor<'_>) -> ConfigError {
+    match c.peek() {
+        None => c.error(FORMAT, "unterminated string"),
+        Some(b'\n' | b'\r') => c.error(FORMAT, "newline in single-line string"),
+        Some(_) => c.error(FORMAT, "control character in string"),
     }
 }
 
-fn literal_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
+fn basic_string<'a>(c: &mut Cursor<'a>) -> Result<Cow<'a, str>, ConfigError> {
     c.bump();
-    let mut out = String::new();
+    let first = take_plain_run(c, b'"', true);
+    if c.peek() == Some(b'"') {
+        c.bump();
+        return Ok(Cow::Borrowed(first));
+    }
+    let mut out = String::from(first);
     loop {
-        let Some(ch) = peek_char(c) else {
-            return Err(c.error(FORMAT, "unterminated string"));
-        };
-        match ch {
-            '\'' => {
+        match c.peek() {
+            Some(b'"') => {
                 c.bump();
-                return Ok(out);
+                return Ok(Cow::Owned(out));
             },
-            '\n' | '\r' => return Err(c.error(FORMAT, "newline in single-line string")),
-            ch if is_control(ch) => return Err(c.error(FORMAT, "control character in string")),
-            _ => {
+            Some(b'\\') => {
                 c.bump();
-                out.push(ch);
+                out.push(escape(c)?);
             },
+            _ => return Err(string_stop(c)),
         }
+        out.push_str(take_plain_run(c, b'"', true));
+    }
+}
+
+fn literal_string<'a>(c: &mut Cursor<'a>) -> Result<Cow<'a, str>, ConfigError> {
+    c.bump();
+    let text = take_plain_run(c, b'\'', false);
+    if c.peek() == Some(b'\'') {
+        c.bump();
+        Ok(Cow::Borrowed(text))
+    } else {
+        Err(string_stop(c))
     }
 }
 
