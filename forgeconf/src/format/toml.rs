@@ -2,15 +2,18 @@
 //!
 //! Values are built into a private [`TableSlot`] tree that carries the TOML
 //! table-definition state (implicit, header, dotted), which the public
-//! [`ConfigNode`] deliberately lacks. Inline tables and static arrays are
-//! already finished nodes ([`Slot::Leaf`]), so nothing can extend them.
+//! [`ConfigNode`] deliberately lacks. Scalars, inline tables and static
+//! arrays are already finished nodes ("leaves"), so nothing can extend them
+//! and they go into the output table as they are; only tables and arrays of
+//! tables defined by headers or dotted keys stay builder slots until the end.
 
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
 use super::cursor::{Cursor, MAX_DEPTH};
-use crate::{ConfigError, ConfigNode, ErrorKind, Origin};
+use crate::{ConfigError, ConfigNode, ErrorKind, Origin, Table};
 
 const FORMAT: &str = "toml";
 
@@ -19,52 +22,67 @@ pub(crate) fn parse(input: &str, source: &str) -> Result<ConfigNode, ConfigError
     let mut c = Cursor::new(input, source);
     c.eat("\u{feff}");
     let mut root = TableSlot::new(c.origin(), State::Header);
-    let mut current: Vec<String> = Vec::new();
+    // The `[header]` that ended the previous section, not yet applied.
+    let mut header: Option<(Key<'_>, bool)> = None;
     // Levels `enter`ed for the current `[header]`; keeps nesting under
     // MAX_DEPTH.
     let mut header_depth = 0;
 
     loop {
-        skip_ws(&mut c);
-        match c.peek() {
-            None => break,
-            Some(b'#') => skip_comment(&mut c)?,
-            Some(b'[') => {
+        let table = match header.take() {
+            None => &mut root,
+            Some((key, is_array)) => {
                 for _ in 0..header_depth {
                     c.leave();
                 }
                 header_depth = 0;
-                let (key, is_array) = parse_header(&mut c)?;
                 for _ in 0..key.len() {
                     c.enter(FORMAT)?;
                     header_depth += 1;
                 }
-                apply_header(&mut root, &key, is_array)?;
-                current = key.names();
+                let table = apply_header(&mut root, &key, is_array)?;
                 end_of_expression(&mut c)?;
+                table
             },
-            Some(_) if eat_newline(&mut c) => {},
-            Some(_) => {
-                let key = parse_key(&mut c)?;
-                skip_ws(&mut c);
-                expect(&mut c, "=", "`=` after the key")?;
-                skip_ws(&mut c);
-                for _ in &key.parents {
-                    c.enter(FORMAT)?;
-                }
-                let value = parse_value(&mut c)?;
-                for _ in &key.parents {
-                    c.leave();
-                }
-                let origin = key.last.origin.clone();
-                let table = table_at(&mut root, &current)
-                    .ok_or_else(|| error_at(&origin, "internal error: lost the current table"))?;
-                insert_key_value(table, &key, value)?;
-                end_of_expression(&mut c)?;
-            },
+        };
+        header = parse_section(&mut c, table)?;
+        if header.is_none() {
+            break;
         }
     }
     Ok(root.into_node())
+}
+
+/// Parse key/value lines into `table` up to the next `[header]`, which is
+/// returned unapplied, or to the end of input.
+fn parse_section<'a>(
+    c: &mut Cursor<'a>,
+    table: &mut TableSlot,
+) -> Result<Option<(Key<'a>, bool)>, ConfigError> {
+    loop {
+        skip_ws(c);
+        match c.peek() {
+            None => return Ok(None),
+            Some(b'#') => skip_comment(c)?,
+            Some(b'[') => return parse_header(c).map(Some),
+            Some(_) if eat_newline(c) => {},
+            Some(_) => {
+                let key = parse_key(c)?;
+                skip_ws(c);
+                expect(c, "=", "`=` after the key")?;
+                skip_ws(c);
+                for _ in &key.parents {
+                    c.enter(FORMAT)?;
+                }
+                let value = parse_value(c)?;
+                for _ in &key.parents {
+                    c.leave();
+                }
+                insert_key_value(table, &key, value)?;
+                end_of_expression(c)?;
+            },
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +103,11 @@ enum State {
 
 #[derive(Debug)]
 struct TableSlot {
-    entries: BTreeMap<String, Slot>,
+    /// Finished values, keyed by name.
+    leaves: Leaves,
+    /// Tables and arrays of tables still open to headers or dotted keys. A
+    /// name is in `leaves` or in `children`, never in both.
+    children: BTreeMap<String, Child>,
     state: State,
     origin: Origin,
 }
@@ -97,33 +119,122 @@ struct ArraySlot {
 }
 
 #[derive(Debug)]
-enum Slot {
-    /// Scalar, static array or inline table: complete and immutable.
-    Leaf(ConfigNode),
+enum Child {
     Table(TableSlot),
     /// `[[array.of.tables]]`; headers address its last element.
     Array(ArraySlot),
 }
 
+/// Up to this many unsorted entries are searched linearly.
+const LINEAR_MAX: usize = 16;
+
+/// Name-to-node entries of one table. Documents mostly list keys in sorted
+/// order, and the generators of large ones always do, so entries are kept in
+/// a plain list while they stay strictly ascending (one comparison per
+/// insert, no tree rebalancing) and become a map only once they do not.
+#[derive(Debug)]
+enum Leaves {
+    List {
+        items: Vec<(String, ConfigNode)>,
+        sorted: bool,
+    },
+    Map(Table),
+}
+
+impl Leaves {
+    fn get(&self, name: &str) -> Option<&ConfigNode> {
+        match self {
+            Self::Map(map) => map.get(name),
+            Self::List { items, sorted: true } => {
+                let i = items.binary_search_by(|(k, _)| k.as_str().cmp(name)).ok()?;
+                items.get(i).map(|(_, node)| node)
+            },
+            Self::List { items, sorted: false } => items
+                .iter()
+                .find_map(|(k, node)| (k == name).then_some(node)),
+        }
+    }
+
+    /// Add `name`; false, with nothing added, when it is already present.
+    fn insert(&mut self, name: &str, node: ConfigNode) -> bool {
+        if let Self::List { items, sorted } = self {
+            if *sorted {
+                match items.last().map(|(last, _)| last.as_str().cmp(name)) {
+                    None | Some(Ordering::Less) => {
+                        items.push((String::from(name), node));
+                        return true;
+                    },
+                    Some(Ordering::Equal) => return false,
+                    Some(Ordering::Greater) => *sorted = false,
+                }
+            }
+            if items.len() < LINEAR_MAX {
+                if items.iter().any(|(k, _)| k == name) {
+                    return false;
+                }
+                items.push((String::from(name), node));
+                return true;
+            }
+            *self = Self::Map(std::mem::take(items).into_iter().collect());
+        }
+        match self {
+            Self::Map(map) => match map.entry(String::from(name)) {
+                Entry::Occupied(_) => false,
+                Entry::Vacant(slot) => {
+                    slot.insert(node);
+                    true
+                },
+            },
+            Self::List { .. } => false,
+        }
+    }
+
+    fn into_table(self) -> Table {
+        match self {
+            Self::Map(map) => map,
+            Self::List { items, .. } => items.into_iter().collect(),
+        }
+    }
+}
+
 impl TableSlot {
     fn new(origin: Origin, state: State) -> Self {
-        Self { entries: BTreeMap::new(), state, origin }
+        Self {
+            leaves: Leaves::List { items: Vec::new(), sorted: true },
+            children: BTreeMap::new(),
+            state,
+            origin,
+        }
+    }
+
+    /// Add a finished value; false when the name is taken.
+    fn insert_leaf(&mut self, name: &str, node: ConfigNode) -> bool {
+        if !self.children.is_empty() && self.children.contains_key(name) {
+            return false;
+        }
+        self.leaves.insert(name, node)
     }
 
     fn into_node(self) -> ConfigNode {
-        let table = self
-            .entries
-            .into_iter()
-            .map(|(key, slot)| (key, slot.into_node()))
-            .collect();
+        let mut table = self.leaves.into_table();
+        if table.is_empty() {
+            table = self
+                .children
+                .into_iter()
+                .map(|(name, child)| (name, child.into_node()))
+                .collect();
+        } else {
+            for (name, child) in self.children {
+                table.insert(name, child.into_node());
+            }
+        }
         ConfigNode::table(table).with_origin(self.origin)
     }
 }
 
-impl Slot {
+impl Child {
     fn into_node(self) -> ConfigNode {
         match self {
-            Self::Leaf(node) => node,
             Self::Table(table) => table.into_node(),
             Self::Array(array) => {
                 let items = array.items.into_iter().map(TableSlot::into_node).collect();
@@ -131,19 +242,15 @@ impl Slot {
             },
         }
     }
-}
 
-/// The table a header selected, through array-of-tables to their last element.
-fn table_at<'t>(root: &'t mut TableSlot, path: &[String]) -> Option<&'t mut TableSlot> {
-    let mut cur = root;
-    for name in path {
-        cur = match cur.entries.get_mut(name)? {
-            Slot::Table(table) => table,
-            Slot::Array(array) => array.items.last_mut()?,
-            Slot::Leaf(_) => return None,
-        };
+    /// The table a header addresses: the table itself, or the last element of
+    /// an array of tables.
+    fn last_table(&mut self) -> Option<&mut TableSlot> {
+        match self {
+            Self::Table(table) => Some(table),
+            Self::Array(array) => array.items.last_mut(),
+        }
     }
-    Some(cur)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -162,16 +269,20 @@ fn descend<'t>(
     mode: Mode,
 ) -> Result<&'t mut TableSlot, ConfigError> {
     let part = key.part(i);
-    let created = match mode {
-        Mode::Header => State::Implicit,
-        Mode::Dotted => State::Dotted,
-    };
-    let slot = cur
-        .entries
-        .entry(String::from(&*part.name))
-        .or_insert_with(|| Slot::Table(TableSlot::new(part.origin.clone(), created)));
-    match slot {
-        Slot::Table(table) => {
+    if let Some(node) = cur.leaves.get(&part.name) {
+        return Err(leaf_error(&part.origin, &key.prefix(i + 1), node));
+    }
+    if !cur.children.contains_key(&*part.name) {
+        let created = match mode {
+            Mode::Header => State::Implicit,
+            Mode::Dotted => State::Dotted,
+        };
+        let table = TableSlot::new(part.origin.clone(), created);
+        cur.children
+            .insert(String::from(&*part.name), Child::Table(table));
+    }
+    match cur.children.get_mut(&*part.name) {
+        Some(Child::Table(table)) => {
             if mode == Mode::Dotted {
                 match table.state {
                     State::Header => {
@@ -186,7 +297,7 @@ fn descend<'t>(
             }
             Ok(table)
         },
-        Slot::Array(array) => {
+        Some(Child::Array(array)) => {
             if mode == Mode::Dotted {
                 return Err(error_at(
                     &part.origin,
@@ -203,7 +314,7 @@ fn descend<'t>(
                 )
             })
         },
-        Slot::Leaf(node) => Err(leaf_error(&part.origin, &key.prefix(i + 1), node)),
+        None => Err(error_at(&part.origin, "internal error: lost a table")),
     }
 }
 
@@ -216,57 +327,61 @@ fn leaf_error(origin: &Origin, path: &str, node: &ConfigNode) -> ConfigError {
     error_at(origin, message)
 }
 
-fn apply_header(root: &mut TableSlot, key: &Key<'_>, is_array: bool) -> Result<(), ConfigError> {
+/// Apply a `[header]`; returns the table the following key/value lines fill.
+fn apply_header<'t>(
+    root: &'t mut TableSlot,
+    key: &Key<'_>,
+    is_array: bool,
+) -> Result<&'t mut TableSlot, ConfigError> {
     let mut cur = root;
     for i in 0..key.parents.len() {
         cur = descend(cur, key, i, Mode::Header)?;
     }
     let last = &key.last;
     let path = || key.prefix(key.len());
-    match cur.entries.entry(String::from(&*last.name)) {
+    if let Some(node) = cur.leaves.get(&last.name) {
+        return Err(leaf_error(&last.origin, &path(), node));
+    }
+    let lost = || error_at(&last.origin, "internal error: empty array of tables");
+    match cur.children.entry(String::from(&*last.name)) {
         Entry::Vacant(slot) => {
             let table = TableSlot::new(last.origin.clone(), State::Header);
             slot.insert(if is_array {
-                Slot::Array(ArraySlot {
+                Child::Array(ArraySlot {
                     items: vec![table],
                     origin: last.origin.clone(),
                 })
             } else {
-                Slot::Table(table)
-            });
+                Child::Table(table)
+            })
+            .last_table()
+            .ok_or_else(lost)
         },
-        Entry::Occupied(mut slot) => match (slot.get_mut(), is_array) {
-            (Slot::Table(table), false) if table.state == State::Implicit => {
+        Entry::Occupied(slot) => match (slot.into_mut(), is_array) {
+            (Child::Table(table), false) if table.state == State::Implicit => {
                 table.state = State::Header;
                 table.origin = last.origin.clone();
+                Ok(table)
             },
-            (Slot::Array(array), true) => {
+            (Child::Array(array), true) => {
                 array
                     .items
                     .push(TableSlot::new(last.origin.clone(), State::Header));
+                array.items.last_mut().ok_or_else(lost)
             },
-            (Slot::Leaf(node), _) => return Err(leaf_error(&last.origin, &path(), node)),
-            (Slot::Table(_), false) => {
-                return Err(error_at(
-                    &last.origin,
-                    format!("table \"{}\" is already defined", path()),
-                ));
+            (Child::Table(_), false) => {
+                Err(error_at(&last.origin, format!("table \"{}\" is already defined", path())))
             },
-            (Slot::Table(_), true) => {
-                return Err(error_at(
-                    &last.origin,
-                    format!("table \"{}\" cannot be redefined as an array of tables", path()),
-                ));
-            },
-            (Slot::Array(_), false) => {
-                return Err(error_at(
-                    &last.origin,
-                    format!("array of tables \"{}\" cannot be redefined as a table", path()),
-                ));
-            },
+            (Child::Table(_), true) => Err(error_at(
+                &last.origin,
+                format!("table \"{}\" cannot be redefined as an array of tables", path()),
+            )),
+            (Child::Array(_), false) => Err(error_at(
+                &last.origin,
+                format!("array of tables \"{}\" cannot be redefined as a table", path()),
+            )),
         },
     }
-    Ok(())
 }
 
 fn insert_key_value(
@@ -278,14 +393,10 @@ fn insert_key_value(
     for i in 0..key.parents.len() {
         cur = descend(cur, key, i, Mode::Dotted)?;
     }
-    match cur.entries.entry(String::from(&*key.last.name)) {
-        Entry::Occupied(_) => {
-            Err(error_at(&key.last.origin, format!("duplicate key \"{}\"", key.prefix(key.len()))))
-        },
-        Entry::Vacant(slot) => {
-            slot.insert(Slot::Leaf(value));
-            Ok(())
-        },
+    if cur.insert_leaf(&key.last.name, value) {
+        Ok(())
+    } else {
+        Err(error_at(&key.last.origin, format!("duplicate key \"{}\"", key.prefix(key.len()))))
     }
 }
 
@@ -328,14 +439,6 @@ impl Key<'_> {
             .map(|p| &*p.name)
             .collect();
         names.join(".")
-    }
-
-    fn names(&self) -> Vec<String> {
-        self.parents
-            .iter()
-            .chain(Some(&self.last))
-            .map(|p| String::from(&*p.name))
-            .collect()
     }
 }
 
