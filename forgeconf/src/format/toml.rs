@@ -914,6 +914,14 @@ fn scalar_text(text: &str) -> Result<String, String> {
     if matches!(text, "true" | "false") {
         return Ok(text.to_owned());
     }
+    // Plain decimal integers short of i64's range are already in canonical
+    // form: no sign, underscores or leading zero.
+    if matches!(text.len(), 1..=18)
+        && text.bytes().all(|b| b.is_ascii_digit())
+        && (text.len() == 1 || !text.starts_with('0'))
+    {
+        return Ok(text.to_owned());
+    }
     let bytes = text.as_bytes();
     let starts_date = bytes.get(4) == Some(&b'-') && bytes[..4].iter().all(u8::is_ascii_digit);
     let starts_time = bytes.get(2) == Some(&b':') && bytes[..2].iter().all(u8::is_ascii_digit);
