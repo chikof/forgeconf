@@ -69,7 +69,7 @@ fn parse_section<'a>(
             Some(_) => {
                 let key = parse_key(c)?;
                 skip_ws(c);
-                expect(c, "=", "`=` after the key")?;
+                expect_byte(c, b'=', "`=` after the key")?;
                 skip_ws(c);
                 for _ in &key.parents {
                     c.enter(FORMAT)?;
@@ -447,7 +447,7 @@ fn parse_key<'a>(c: &mut Cursor<'a>) -> Result<Key<'a>, ConfigError> {
     let mut current = parse_key_part(c)?;
     loop {
         skip_ws(c);
-        if !c.eat(".") {
+        if !eat_byte(c, b'.') {
             break;
         }
         parents.push(std::mem::replace(&mut current, parse_key_part(c)?));
@@ -493,7 +493,7 @@ fn parse_header<'a>(c: &mut Cursor<'a>) -> Result<(Key<'a>, bool), ConfigError> 
     if is_array {
         expect(c, "]]", "`]]` to close the header")?;
     } else {
-        expect(c, "]", "`]` to close the header")?;
+        expect_byte(c, b']', "`]` to close the header")?;
     }
     Ok((key, is_array))
 }
@@ -503,18 +503,29 @@ fn parse_header<'a>(c: &mut Cursor<'a>) -> Result<(Key<'a>, bool), ConfigError> 
 // ---------------------------------------------------------------------------
 
 fn skip_ws(c: &mut Cursor<'_>) {
+    if !matches!(c.peek(), Some(b' ' | b'\t')) {
+        return;
+    }
     let n = c
         .rest()
         .bytes()
         .take_while(|b| matches!(b, b' ' | b'\t'))
         .count();
-    if n > 0 {
-        c.advance(n);
-    }
+    c.advance(n);
 }
 
 fn eat_newline(c: &mut Cursor<'_>) -> bool {
-    c.eat("\n") || c.eat("\r\n")
+    match c.peek() {
+        Some(b'\n') => {
+            c.bump();
+            true
+        },
+        Some(b'\r') if c.peek_at(1) == Some(b'\n') => {
+            c.advance(2);
+            true
+        },
+        _ => false,
+    }
 }
 
 fn at_newline(c: &Cursor<'_>) -> bool {
@@ -573,6 +584,18 @@ fn expect(c: &mut Cursor<'_>, token: &str, what: &str) -> Result<(), ConfigError
     if c.eat(token) { Ok(()) } else { Err(c.error(FORMAT, format!("expected {what}"))) }
 }
 
+fn eat_byte(c: &mut Cursor<'_>, byte: u8) -> bool {
+    let found = c.peek() == Some(byte);
+    if found {
+        c.bump();
+    }
+    found
+}
+
+fn expect_byte(c: &mut Cursor<'_>, byte: u8, what: &str) -> Result<(), ConfigError> {
+    if eat_byte(c, byte) { Ok(()) } else { Err(c.error(FORMAT, format!("expected {what}"))) }
+}
+
 // ---------------------------------------------------------------------------
 // Values
 // ---------------------------------------------------------------------------
@@ -609,15 +632,15 @@ fn parse_array(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
     let mut items = Vec::new();
     loop {
         skip_ws_newlines_comments(c)?;
-        if c.eat("]") {
+        if eat_byte(c, b']') {
             break;
         }
         items.push(parse_value(c)?);
         skip_ws_newlines_comments(c)?;
-        if c.eat(",") {
+        if eat_byte(c, b',') {
             continue;
         }
-        if c.eat("]") {
+        if eat_byte(c, b']') {
             break;
         }
         return Err(c.error(FORMAT, "expected `,` or `]` in array"));
@@ -631,11 +654,11 @@ fn parse_inline_table(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
     let mut table = TableSlot::new(c.origin(), State::Header);
     c.bump();
     skip_ws(c);
-    if !c.eat("}") {
+    if !eat_byte(c, b'}') {
         loop {
             let key = parse_key(c)?;
             skip_ws(c);
-            expect(c, "=", "`=` after the key")?;
+            expect_byte(c, b'=', "`=` after the key")?;
             skip_ws(c);
             for _ in &key.parents {
                 c.enter(FORMAT)?;
@@ -646,14 +669,14 @@ fn parse_inline_table(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
             }
             insert_key_value(&mut table, &key, value)?;
             skip_ws(c);
-            if c.eat(",") {
+            if eat_byte(c, b',') {
                 skip_ws(c);
                 if c.peek() == Some(b'}') {
                     return Err(c.error(FORMAT, "trailing comma in inline table"));
                 }
                 continue;
             }
-            if c.eat("}") {
+            if eat_byte(c, b'}') {
                 break;
             }
             return Err(c.error(FORMAT, "expected `,` or `}` in inline table"));
