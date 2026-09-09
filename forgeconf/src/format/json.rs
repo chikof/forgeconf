@@ -1,17 +1,32 @@
 //! In-house JSON parser (RFC 8259) producing [`ConfigNode`] trees.
 
 use super::cursor::Cursor;
-use crate::{ConfigError, ConfigNode, ErrorKind, Origin, Table};
+use crate::{ConfigError, ConfigNode, Table};
 
 const FORMAT: &str = "json";
+
+/// The text being parsed, kept to rebuild the origin of an earlier key when a
+/// duplicate is reported.
+struct Doc<'a> {
+    input: &'a str,
+    source: &'a str,
+}
+
+/// A parsed object member, with the byte offset of its key.
+struct Entry {
+    key: String,
+    node: ConfigNode,
+    pos: usize,
+}
 
 /// Parse JSON content into a [`ConfigNode`] tree. Any JSON value is a valid
 /// document; a leading UTF-8 BOM is skipped.
 pub(crate) fn parse(input: &str, source: &str) -> Result<ConfigNode, ConfigError> {
     let input = input.strip_prefix('\u{feff}').unwrap_or(input);
+    let doc = Doc { input, source };
     let mut cursor = Cursor::new(input, source);
     skip_ws(&mut cursor);
-    let node = parse_value(&mut cursor)?;
+    let node = parse_value(&mut cursor, &doc)?;
     skip_ws(&mut cursor);
     if !cursor.is_eof() {
         return Err(cursor.error(FORMAT, "unexpected content after the top-level value"));
@@ -25,18 +40,18 @@ fn skip_ws(c: &mut Cursor<'_>) {
     }
 }
 
-fn parse_value(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
+fn parse_value(c: &mut Cursor<'_>, doc: &Doc<'_>) -> Result<ConfigNode, ConfigError> {
     let origin = c.origin();
     let node = match c.peek() {
         Some(b'{') => {
             c.enter(FORMAT)?;
-            let node = parse_object(c);
+            let node = parse_object(c, doc);
             c.leave();
             node?
         },
         Some(b'[') => {
             c.enter(FORMAT)?;
-            let node = parse_array(c);
+            let node = parse_array(c, doc);
             c.leave();
             node?
         },
@@ -67,29 +82,38 @@ fn expect(c: &mut Cursor<'_>, byte: u8, expected: &str) -> Result<(), ConfigErro
     }
 }
 
-fn parse_object(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
+/// Members are collected in document order and turned into the table in one
+/// pass at the end. A duplicate key must still win over any error that comes
+/// after its second occurrence, so every failure path checks the members read
+/// so far (`fail`).
+fn parse_object(c: &mut Cursor<'_>, doc: &Doc<'_>) -> Result<ConfigNode, ConfigError> {
     c.bump();
-    let mut table = Table::new();
+    let mut entries: Vec<Entry> = Vec::new();
     skip_ws(c);
     if c.peek() == Some(b'}') {
         c.bump();
-        return Ok(ConfigNode::table(table));
+        return Ok(ConfigNode::table(Table::new()));
     }
     loop {
         skip_ws(c);
         if c.peek() != Some(b'"') {
-            return Err(unexpected(c, "a string key"));
+            return Err(fail(doc, entries, None, unexpected(c, "a string key")));
         }
-        let key_origin = c.origin();
-        let key = parse_string(c)?;
-        if table.contains_key(&key) {
-            return Err(duplicate_key(&key, &key_origin));
+        let pos = c.pos();
+        let key = match parse_string(c) {
+            Ok(key) => key,
+            Err(err) => return Err(fail(doc, entries, None, err)),
+        };
+        skip_ws(c);
+        if let Err(err) = expect(c, b':', "`:`") {
+            return Err(fail(doc, entries, Some((key, pos)), err));
         }
         skip_ws(c);
-        expect(c, b':', "`:`")?;
-        skip_ws(c);
-        let value = parse_value(c)?;
-        table.insert(key, value);
+        let node = match parse_value(c, doc) {
+            Ok(node) => node,
+            Err(err) => return Err(fail(doc, entries, Some((key, pos)), err)),
+        };
+        entries.push(Entry { key, node, pos });
         skip_ws(c);
         match c.peek() {
             Some(b',') => {
@@ -97,22 +121,67 @@ fn parse_object(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
             },
             Some(b'}') => {
                 c.bump();
-                return Ok(ConfigNode::table(table));
+                return build_table(doc, entries).map(ConfigNode::table);
             },
-            _ => return Err(unexpected(c, "`,` or `}`")),
+            _ => return Err(fail(doc, entries, None, unexpected(c, "`,` or `}`"))),
         }
     }
 }
 
-fn duplicate_key(key: &str, origin: &Origin) -> ConfigError {
-    ConfigError::new(ErrorKind::Syntax {
-        format: FORMAT,
-        message: format!("duplicate key \"{key}\""),
-    })
-    .with_origin(Some(origin))
+fn by_key(a: &Entry, b: &Entry) -> std::cmp::Ordering {
+    a.key.cmp(&b.key)
 }
 
-fn parse_array(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
+/// Among entries sorted stably by key, the repeated key whose second
+/// occurrence comes first in the document.
+fn earliest_duplicate(sorted: &[Entry]) -> Option<&Entry> {
+    sorted
+        .windows(2)
+        .filter(|pair| pair[0].key == pair[1].key)
+        .map(|pair| &pair[1])
+        .min_by_key(|entry| entry.pos)
+}
+
+fn duplicate_key(doc: &Doc<'_>, entry: &Entry) -> ConfigError {
+    let mut at = Cursor::new(doc.input, doc.source);
+    at.advance(entry.pos);
+    at.error(FORMAT, format!("duplicate key \"{}\"", entry.key))
+}
+
+/// Table from the members of one object, rejecting repeated keys. Keys that
+/// already ascend (the usual output of a serializer) need no sort.
+fn build_table(doc: &Doc<'_>, mut entries: Vec<Entry>) -> Result<Table, ConfigError> {
+    if !entries.windows(2).all(|pair| pair[0].key < pair[1].key) {
+        entries.sort_by(by_key);
+        if let Some(entry) = earliest_duplicate(&entries) {
+            return Err(duplicate_key(doc, entry));
+        }
+    }
+    Ok(entries
+        .into_iter()
+        .map(|entry| (entry.key, entry.node))
+        .collect())
+}
+
+/// `err` for a failed object, unless a duplicate key precedes it: the
+/// document is then rejected for the duplicate, as soon as its key is read.
+fn fail(
+    doc: &Doc<'_>,
+    mut entries: Vec<Entry>,
+    pending: Option<(String, usize)>,
+    err: ConfigError,
+) -> ConfigError {
+    if let Some((key, pos)) = pending {
+        entries.push(Entry { key, node: ConfigNode::null(), pos });
+    }
+    entries.sort_by(by_key);
+    match earliest_duplicate(&entries) {
+        Some(entry) => duplicate_key(doc, entry),
+        None => err,
+    }
+}
+
+fn parse_array(c: &mut Cursor<'_>, doc: &Doc<'_>) -> Result<ConfigNode, ConfigError> {
     c.bump();
     let mut items = Vec::new();
     skip_ws(c);
@@ -122,7 +191,7 @@ fn parse_array(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
     }
     loop {
         skip_ws(c);
-        items.push(parse_value(c)?);
+        items.push(parse_value(c, doc)?);
         skip_ws(c);
         match c.peek() {
             Some(b',') => {
@@ -138,30 +207,45 @@ fn parse_array(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
 }
 
 fn parse_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
-    c.bump();
+    c.advance(1);
     let mut out = String::new();
     loop {
-        match c.peek() {
-            None => return Err(c.error(FORMAT, "unterminated string")),
+        let rest = c.rest();
+        let bytes = rest.as_bytes();
+        let len = bytes
+            .iter()
+            .position(|&b| b == b'"' || b == b'\\' || b < 0x20)
+            .unwrap_or(bytes.len());
+        let run = rest.get(..len).unwrap_or("");
+        match bytes.get(len) {
             Some(b'"') => {
-                c.bump();
-                return Ok(out);
+                // No escape seen yet: `out` is empty and the run is the whole
+                // string.
+                let text = if out.is_empty() {
+                    run.to_owned()
+                } else {
+                    out.push_str(run);
+                    out
+                };
+                c.advance(len + 1);
+                return Ok(text);
             },
             Some(b'\\') => {
-                c.bump();
+                out.push_str(run);
+                c.advance(len + 1);
                 out.push(parse_escape(c)?);
             },
-            Some(byte) if byte < 0x20 => {
+            Some(_) => {
+                c.advance(len);
                 return Err(c.error(FORMAT, "control character in string"));
             },
-            Some(_) => match c.bump() {
-                Some(ch) => out.push(ch),
-                None => return Err(c.error(FORMAT, "unterminated string")),
+            None => {
+                c.advance(len);
+                return Err(c.error(FORMAT, "unterminated string"));
             },
         }
     }
 }
-
 /// Decode the escape after a consumed backslash.
 fn parse_escape(c: &mut Cursor<'_>) -> Result<char, ConfigError> {
     let Some(byte) = c.peek() else {
@@ -223,41 +307,46 @@ fn parse_hex4(c: &mut Cursor<'_>) -> Result<u32, ConfigError> {
 
 /// Validate a number against the JSON grammar and return its exact text.
 fn parse_number(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
-    let start = c.pos();
-    if c.peek() == Some(b'-') {
-        c.bump();
+    let rest = c.rest();
+    let bytes = rest.as_bytes();
+    let digits = |from: usize| {
+        bytes
+            .iter()
+            .skip(from)
+            .take_while(|b| b.is_ascii_digit())
+            .count()
+    };
+    let mut end = usize::from(bytes.first() == Some(&b'-'));
+    match bytes.get(end) {
+        Some(b'0') => end += 1,
+        Some(b'1'..=b'9') => end += 1 + digits(end + 1),
+        _ => return Err(number_error(c, end)),
     }
-    match c.peek() {
-        Some(b'0') => {
-            c.bump();
-        },
-        Some(b'1'..=b'9') => skip_digits(c),
-        _ => return Err(unexpected(c, "a digit")),
-    }
-    if c.peek() == Some(b'.') {
-        c.bump();
-        require_digit(c)?;
-        skip_digits(c);
-    }
-    if matches!(c.peek(), Some(b'e' | b'E')) {
-        c.bump();
-        if matches!(c.peek(), Some(b'+' | b'-')) {
-            c.bump();
+    if bytes.get(end) == Some(&b'.') {
+        end += 1;
+        match digits(end) {
+            0 => return Err(number_error(c, end)),
+            n => end += n,
         }
-        require_digit(c)?;
-        skip_digits(c);
     }
-    Ok(c.slice_from(start).to_owned())
+    if matches!(bytes.get(end), Some(b'e' | b'E')) {
+        end += 1;
+        if matches!(bytes.get(end), Some(b'+' | b'-')) {
+            end += 1;
+        }
+        match digits(end) {
+            0 => return Err(number_error(c, end)),
+            n => end += n,
+        }
+    }
+    c.advance(end);
+    Ok(rest.get(..end).unwrap_or("").to_owned())
 }
 
-fn require_digit(c: &Cursor<'_>) -> Result<(), ConfigError> {
-    if matches!(c.peek(), Some(b'0'..=b'9')) { Ok(()) } else { Err(unexpected(c, "a digit")) }
-}
-
-fn skip_digits(c: &mut Cursor<'_>) {
-    while matches!(c.peek(), Some(b'0'..=b'9')) {
-        c.bump();
-    }
+/// The error for a missing digit `offset` bytes into the number.
+fn number_error(c: &mut Cursor<'_>, offset: usize) -> ConfigError {
+    c.advance(offset);
+    unexpected(c, "a digit")
 }
 
 #[cfg(test)]
@@ -265,7 +354,7 @@ mod test {
     #![allow(clippy::unwrap_used, reason = "tests assert on known-good fixtures")]
 
     use super::*;
-    use crate::Value;
+    use crate::{ErrorKind, Origin, Value};
 
     /// Rebuild `node` without origins so trees compare by value.
     fn strip(node: &ConfigNode) -> ConfigNode {
@@ -386,6 +475,25 @@ mod test {
     fn duplicate_key_reports_origin_of_second_key() {
         let err = parse("{\n  \"a\": 1,\n  \"a\": 2}", "<string>").unwrap_err();
         assert_eq!(err.to_string(), "invalid json: duplicate key \"a\" (<string>:3:3)");
+    }
+
+    #[test]
+    fn earliest_duplicate_wins_over_later_errors_and_keys() {
+        let cases = [
+            ("{\"b\": 1, \"a\": 1, \"b\": 2, \"a\": 2}", "duplicate key \"b\" (<string>:1:18)"),
+            ("{\"a\": 1, \"a\": @}", "duplicate key \"a\" (<string>:1:10)"),
+            ("{\"a\": 1, \"a\" 2}", "duplicate key \"a\" (<string>:1:10)"),
+            ("{\"a\": 1, \"a\": 2, \"b\": }", "duplicate key \"a\" (<string>:1:10)"),
+            ("{\"a\": 1, \"a\": 2 \"b\"}", "duplicate key \"a\" (<string>:1:10)"),
+            (
+                "{\"x\": {\"a\": 1, \"a\": 2}, \"y\": 1, \"y\": 2}",
+                "duplicate key \"a\" (<string>:1:16)",
+            ),
+        ];
+        for (input, message) in cases {
+            let err = parse(input, "<string>").unwrap_err();
+            assert_eq!(err.to_string(), format!("invalid json: {message}"), "{input}");
+        }
     }
 
     #[test]
