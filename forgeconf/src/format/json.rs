@@ -1,9 +1,16 @@
 //! In-house JSON parser (RFC 8259) producing [`ConfigNode`] trees.
 
+use std::collections::btree_map::Entry as MapEntry;
+
 use super::cursor::Cursor;
 use crate::{ConfigError, ConfigNode, Table};
 
 const FORMAT: &str = "json";
+
+/// Objects up to this size are filled by inserting in document order, which
+/// meets the first repeated key on the way; larger ones are sorted and built in
+/// bulk.
+const SMALL_TABLE: usize = 8;
 
 /// The text being parsed, kept to rebuild the origin of an earlier key when a
 /// duplicate is reported.
@@ -142,19 +149,31 @@ fn earliest_duplicate(sorted: &[Entry]) -> Option<&Entry> {
         .min_by_key(|entry| entry.pos)
 }
 
-fn duplicate_key(doc: &Doc<'_>, entry: &Entry) -> ConfigError {
+fn duplicate_key(doc: &Doc<'_>, key: &str, pos: usize) -> ConfigError {
     let mut at = Cursor::new(doc.input, doc.source);
-    at.advance(entry.pos);
-    at.error(FORMAT, format!("duplicate key \"{}\"", entry.key))
+    at.advance(pos);
+    at.error(FORMAT, format!("duplicate key \"{key}\""))
 }
 
 /// Table from the members of one object, rejecting repeated keys. Keys that
 /// already ascend (the usual output of a serializer) need no sort.
 fn build_table(doc: &Doc<'_>, mut entries: Vec<Entry>) -> Result<Table, ConfigError> {
+    if entries.len() <= SMALL_TABLE {
+        let mut table = Table::new();
+        for Entry { key, node, pos } in entries {
+            match table.entry(key) {
+                MapEntry::Occupied(slot) => return Err(duplicate_key(doc, slot.key(), pos)),
+                MapEntry::Vacant(slot) => {
+                    slot.insert(node);
+                },
+            }
+        }
+        return Ok(table);
+    }
     if !entries.windows(2).all(|pair| pair[0].key < pair[1].key) {
         entries.sort_by(by_key);
         if let Some(entry) = earliest_duplicate(&entries) {
-            return Err(duplicate_key(doc, entry));
+            return Err(duplicate_key(doc, &entry.key, entry.pos));
         }
     }
     Ok(entries
@@ -176,7 +195,7 @@ fn fail(
     }
     entries.sort_by(by_key);
     match earliest_duplicate(&entries) {
-        Some(entry) => duplicate_key(doc, entry),
+        Some(entry) => duplicate_key(doc, &entry.key, entry.pos),
         None => err,
     }
 }
@@ -206,16 +225,38 @@ fn parse_array(c: &mut Cursor<'_>, doc: &Doc<'_>) -> Result<ConfigNode, ConfigEr
     }
 }
 
+/// Length of the leading run of `bytes` free of `"`, `\` and control bytes,
+/// found eight bytes at a time. In `has_zero`, the lowest flagged byte is
+/// always a real match, so the first set bit is exact.
+fn string_run_len(bytes: &[u8]) -> usize {
+    const LOW: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    let has_zero = |x: u64| x.wrapping_sub(LOW) & !x & HIGH;
+    let mut at = 0;
+    while let Some(chunk) = bytes.get(at..).and_then(<[u8]>::first_chunk::<8>) {
+        let word = u64::from_le_bytes(*chunk);
+        let hits = has_zero(word ^ (LOW * u64::from(b'"')))
+            | has_zero(word ^ (LOW * u64::from(b'\\')))
+            | (word.wrapping_sub(LOW * 0x20) & !word & HIGH);
+        if hits != 0 {
+            return at + (hits.trailing_zeros() / 8) as usize;
+        }
+        at += 8;
+    }
+    bytes
+        .iter()
+        .skip(at)
+        .position(|&b| b == b'"' || b == b'\\' || b < 0x20)
+        .map_or(bytes.len(), |i| at + i)
+}
+
 fn parse_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
     c.advance(1);
     let mut out = String::new();
     loop {
         let rest = c.rest();
         let bytes = rest.as_bytes();
-        let len = bytes
-            .iter()
-            .position(|&b| b == b'"' || b == b'\\' || b < 0x20)
-            .unwrap_or(bytes.len());
+        let len = string_run_len(bytes);
         let run = rest.get(..len).unwrap_or("");
         match bytes.get(len) {
             Some(b'"') => {
@@ -448,6 +489,27 @@ mod test {
     fn rejects_raw_control_character() {
         let err = parse("\"a\u{1}b\"", "<string>").unwrap_err();
         assert_eq!(err.to_string(), "invalid json: control character in string (<string>:1:3)");
+    }
+
+    #[test]
+    fn string_scan_is_exact_at_every_offset() {
+        for len in 0..40 {
+            let body = "é".repeat(len / 2) + &"x".repeat(len % 2);
+            let text = format!("[\"{body}\", 1]");
+            let node = parse(&text, "<string>").unwrap();
+            assert_eq!(node.as_array().unwrap()[0].as_str(), Some(body.as_str()), "{len}");
+            let escaped = format!("\"{body}\\n{body}\"");
+            let node = parse(&escaped, "<string>").unwrap();
+            assert_eq!(node.as_str(), Some(format!("{body}\n{body}").as_str()), "{len}");
+            let control = format!("\"{body}\u{1}\"");
+            let err = parse(&control, "<string>").unwrap_err();
+            let column = body.chars().count() + 2;
+            assert_eq!(
+                err.to_string(),
+                format!("invalid json: control character in string (<string>:1:{column})"),
+                "{len}"
+            );
+        }
     }
 
     #[test]
