@@ -17,6 +17,9 @@ const SMALL_TABLE: usize = 8;
 struct Doc<'a> {
     input: &'a str,
     source: &'a str,
+    /// Members of every object being read, innermost last; an object owns the
+    /// entries above its start, so no object allocates a list of its own.
+    stack: Vec<Entry>,
 }
 
 /// A parsed object member, with the byte offset of its key.
@@ -30,10 +33,10 @@ struct Entry {
 /// document; a leading UTF-8 BOM is skipped.
 pub(crate) fn parse(input: &str, source: &str) -> Result<ConfigNode, ConfigError> {
     let input = input.strip_prefix('\u{feff}').unwrap_or(input);
-    let doc = Doc { input, source };
+    let mut doc = Doc { input, source, stack: Vec::new() };
     let mut cursor = Cursor::new(input, source);
     skip_ws(&mut cursor);
-    let node = parse_value(&mut cursor, &doc)?;
+    let node = parse_value(&mut cursor, &mut doc)?;
     skip_ws(&mut cursor);
     if !cursor.is_eof() {
         return Err(cursor.error(FORMAT, "unexpected content after the top-level value"));
@@ -47,7 +50,7 @@ fn skip_ws(c: &mut Cursor<'_>) {
     }
 }
 
-fn parse_value(c: &mut Cursor<'_>, doc: &Doc<'_>) -> Result<ConfigNode, ConfigError> {
+fn parse_value(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, ConfigError> {
     let origin = c.origin();
     let node = match c.peek() {
         Some(b'{') => {
@@ -93,34 +96,35 @@ fn expect(c: &mut Cursor<'_>, byte: u8, expected: &str) -> Result<(), ConfigErro
 /// pass at the end. A duplicate key must still win over any error that comes
 /// after its second occurrence, so every failure path checks the members read
 /// so far (`fail`).
-fn parse_object(c: &mut Cursor<'_>, doc: &Doc<'_>) -> Result<ConfigNode, ConfigError> {
+fn parse_object(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, ConfigError> {
     c.bump();
-    let mut entries: Vec<Entry> = Vec::new();
+    let start = doc.stack.len();
     skip_ws(c);
     if c.peek() == Some(b'}') {
         c.bump();
         return Ok(ConfigNode::table(Table::new()));
     }
     loop {
+        let members = start..doc.stack.len();
         skip_ws(c);
         if c.peek() != Some(b'"') {
-            return Err(fail(doc, entries, None, unexpected(c, "a string key")));
+            return Err(fail(doc, members, None, unexpected(c, "a string key")));
         }
         let pos = c.pos();
         let key = match parse_string(c) {
             Ok(key) => key,
-            Err(err) => return Err(fail(doc, entries, None, err)),
+            Err(err) => return Err(fail(doc, members, None, err)),
         };
         skip_ws(c);
         if let Err(err) = expect(c, b':', "`:`") {
-            return Err(fail(doc, entries, Some((key, pos)), err));
+            return Err(fail(doc, members, Some((key, pos)), err));
         }
         skip_ws(c);
         let node = match parse_value(c, doc) {
             Ok(node) => node,
-            Err(err) => return Err(fail(doc, entries, Some((key, pos)), err)),
+            Err(err) => return Err(fail(doc, members, Some((key, pos)), err)),
         };
-        entries.push(Entry { key, node, pos });
+        doc.stack.push(Entry { key, node, pos });
         skip_ws(c);
         match c.peek() {
             Some(b',') => {
@@ -128,9 +132,12 @@ fn parse_object(c: &mut Cursor<'_>, doc: &Doc<'_>) -> Result<ConfigNode, ConfigE
             },
             Some(b'}') => {
                 c.bump();
-                return build_table(doc, entries).map(ConfigNode::table);
+                return build_table(doc, start).map(ConfigNode::table);
             },
-            _ => return Err(fail(doc, entries, None, unexpected(c, "`,` or `}`"))),
+            _ => {
+                let members = start..doc.stack.len();
+                return Err(fail(doc, members, None, unexpected(c, "`,` or `}`")));
+            },
         }
     }
 }
@@ -149,20 +156,23 @@ fn earliest_duplicate(sorted: &[Entry]) -> Option<&Entry> {
         .min_by_key(|entry| entry.pos)
 }
 
-fn duplicate_key(doc: &Doc<'_>, key: &str, pos: usize) -> ConfigError {
-    let mut at = Cursor::new(doc.input, doc.source);
+fn duplicate_key(input: &str, source: &str, key: &str, pos: usize) -> ConfigError {
+    let mut at = Cursor::new(input, source);
     at.advance(pos);
     at.error(FORMAT, format!("duplicate key \"{key}\""))
 }
 
-/// Table from the members of one object, rejecting repeated keys. Keys that
-/// already ascend (the usual output of a serializer) need no sort.
-fn build_table(doc: &Doc<'_>, mut entries: Vec<Entry>) -> Result<Table, ConfigError> {
-    if entries.len() <= SMALL_TABLE {
+/// Table from the members of one object (the stack entries from `start`),
+/// rejecting repeated keys. Keys that already ascend (the usual output of a
+/// serializer) need no sort.
+fn build_table(doc: &mut Doc<'_>, start: usize) -> Result<Table, ConfigError> {
+    if doc.stack.len().saturating_sub(start) <= SMALL_TABLE {
         let mut table = Table::new();
-        for Entry { key, node, pos } in entries {
+        for Entry { key, node, pos } in doc.stack.drain(start..) {
             match table.entry(key) {
-                MapEntry::Occupied(slot) => return Err(duplicate_key(doc, slot.key(), pos)),
+                MapEntry::Occupied(slot) => {
+                    return Err(duplicate_key(doc.input, doc.source, slot.key(), pos));
+                },
                 MapEntry::Vacant(slot) => {
                     slot.insert(node);
                 },
@@ -170,37 +180,42 @@ fn build_table(doc: &Doc<'_>, mut entries: Vec<Entry>) -> Result<Table, ConfigEr
         }
         return Ok(table);
     }
-    if !entries.windows(2).all(|pair| pair[0].key < pair[1].key) {
-        entries.sort_by(by_key);
-        if let Some(entry) = earliest_duplicate(&entries) {
-            return Err(duplicate_key(doc, &entry.key, entry.pos));
+    let members = doc.stack.get_mut(start..).unwrap_or_default();
+    if !members.windows(2).all(|pair| pair[0].key < pair[1].key) {
+        members.sort_by(by_key);
+        if let Some(entry) = earliest_duplicate(members) {
+            return Err(duplicate_key(doc.input, doc.source, &entry.key, entry.pos));
         }
     }
-    Ok(entries
-        .into_iter()
+    Ok(doc
+        .stack
+        .drain(start..)
         .map(|entry| (entry.key, entry.node))
         .collect())
 }
 
-/// `err` for a failed object, unless a duplicate key precedes it: the
-/// document is then rejected for the duplicate, as soon as its key is read.
+/// `err` for a failed object whose members are `members` on the stack, unless
+/// a duplicate key precedes it: the document is then rejected for the
+/// duplicate, as soon as its key is read.
 fn fail(
-    doc: &Doc<'_>,
-    mut entries: Vec<Entry>,
+    doc: &mut Doc<'_>,
+    members: std::ops::Range<usize>,
     pending: Option<(String, usize)>,
     err: ConfigError,
 ) -> ConfigError {
+    doc.stack.truncate(members.end);
     if let Some((key, pos)) = pending {
-        entries.push(Entry { key, node: ConfigNode::null(), pos });
+        doc.stack.push(Entry { key, node: ConfigNode::null(), pos });
     }
+    let entries = doc.stack.get_mut(members.start..).unwrap_or_default();
     entries.sort_by(by_key);
-    match earliest_duplicate(&entries) {
-        Some(entry) => duplicate_key(doc, &entry.key, entry.pos),
+    match earliest_duplicate(entries) {
+        Some(entry) => duplicate_key(doc.input, doc.source, &entry.key, entry.pos),
         None => err,
     }
 }
 
-fn parse_array(c: &mut Cursor<'_>, doc: &Doc<'_>) -> Result<ConfigNode, ConfigError> {
+fn parse_array(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, ConfigError> {
     c.bump();
     let mut items = Vec::new();
     skip_ws(c);
