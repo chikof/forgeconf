@@ -4,10 +4,10 @@
 use crate::{FieldInfo, Shape};
 
 /// A field that can be set from a single environment variable or flag.
+#[cfg(feature = "cli")]
 pub(crate) struct Leaf {
     /// Keys from the root to this field; `flatten` adds no segment.
     pub(crate) path: Vec<&'static str>,
-    #[cfg_attr(not(feature = "cli"), allow(dead_code, reason = "read by the CLI source and help"))]
     pub(crate) field: &'static FieldInfo,
     /// The field's shape with `Optional` removed: `Scalar`, `Bool`, a unit-only
     /// `Enum`, or a `List` of those.
@@ -18,6 +18,7 @@ pub(crate) struct Leaf {
 
 /// Every settable leaf of `shape`, in declaration order. Lists of tables, maps
 /// and enums with data are skipped: a flat string cannot describe them.
+#[cfg(feature = "cli")]
 pub(crate) fn leaves(shape: Shape) -> Vec<Leaf> {
     let mut out = Vec::new();
     let walked: Result<(), std::convert::Infallible> =
@@ -34,10 +35,10 @@ pub(crate) fn leaves(shape: Shape) -> Vec<Leaf> {
     out
 }
 
-/// Call `f(path, field, shape, env)` for every leaf of `shape`, like
-/// [`leaves`] but without allocating per leaf. `env` is the variable name:
-/// the field's `env`, else the root prefix plus the path; `None` when `names`
-/// is false or the field has neither. It is only valid during the call.
+/// Call `f(path, field, shape, env)` for every settable leaf of `shape`
+/// without allocating per leaf. `env` is the variable name: the field's
+/// `env`, else the root prefix plus the path; `None` when `names` is false or
+/// the field has neither. It is only valid during the call.
 pub(crate) fn visit<E>(
     shape: Shape,
     names: bool,
@@ -180,12 +181,19 @@ mod test {
     )
     .env_prefix("app-");
 
+    fn walked(shape: Shape) -> Vec<(String, Option<String>)> {
+        let mut out = Vec::new();
+        let done: Result<(), ()> = visit(shape, true, &mut |path, _, _, env| {
+            out.push((path.join("."), env.map(str::to_owned)));
+            Ok(())
+        });
+        done.unwrap();
+        out
+    }
+
     #[test]
     fn walks_leaves_with_env_names() {
-        let found: Vec<(String, Option<String>)> = leaves(Shape::Struct(&ROOT))
-            .into_iter()
-            .map(|leaf| (leaf.path.join("."), leaf.env))
-            .collect();
+        let found = walked(Shape::Struct(&ROOT));
         let expected = [
             ("port", Some("APP_PORT")),
             ("server.max_conn", Some("APP_SERVER_MAX_CONN")),
@@ -208,9 +216,9 @@ mod test {
                 FieldInfo::new("b", <u8 as FromNode>::shape).env("B_VAR"),
             ],
         );
-        let envs: Vec<Option<String>> = leaves(Shape::Struct(&BARE))
+        let envs: Vec<Option<String>> = walked(Shape::Struct(&BARE))
             .into_iter()
-            .map(|leaf| leaf.env)
+            .map(|(_, env)| env)
             .collect();
         assert_eq!(envs, [None, Some("B_VAR".to_owned())]);
     }

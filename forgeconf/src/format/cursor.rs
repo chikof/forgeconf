@@ -61,7 +61,7 @@ impl<'a> Cursor<'a> {
 
     /// Input from byte offset `start` (a value of [`Cursor::pos`]) up to the
     /// current position.
-    #[cfg(any(feature = "toml", feature = "json"))]
+    #[cfg(feature = "toml")]
     pub(crate) fn slice_from(&self, start: usize) -> &'a str {
         self.src.get(start..self.pos).unwrap_or("")
     }
@@ -88,6 +88,7 @@ impl<'a> Cursor<'a> {
 
     /// Consume the next `len` bytes; `pos() + len` must be a char boundary,
     /// such as the end of a slice taken from [`Cursor::rest`].
+    #[cfg(any(feature = "toml", feature = "json"))]
     pub(crate) fn advance(&mut self, len: usize) {
         let end = self.pos.saturating_add(len).min(self.src.len());
         for &byte in &self.src.as_bytes()[self.pos..end] {
