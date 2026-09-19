@@ -115,14 +115,19 @@ pub mod fc {
     }
 }
 
-/// confique's view of the same data. Env variables are named per field.
+/// confique's view of the same data. confique has no env prefix, so every
+/// field forgeconf's `env_prefix = "APP_"` covers gets its variable by name:
+/// both libraries then look up the same nine variables.
 pub mod cq {
     use std::collections::BTreeMap;
 
     #[derive(Debug, confique::Config)]
     pub struct AppConfig {
+        #[config(env = "APP_NAME")]
         pub name: String,
+        #[config(env = "APP_DEBUG")]
         pub debug: bool,
+        #[config(env = "APP_FEATURES", parse_env = confique::env::parse::list_by_comma)]
         pub features: Vec<String>,
         #[config(nested)]
         pub server: Server,
@@ -133,17 +138,21 @@ pub mod cq {
 
     #[derive(Debug, confique::Config)]
     pub struct Server {
+        #[config(env = "APP_SERVER_HOST")]
         pub host: String,
         #[config(env = "APP_SERVER_PORT")]
         pub port: u16,
+        #[config(env = "APP_SERVER_WORKERS")]
         pub workers: u32,
     }
 
     #[derive(Debug, confique::Config)]
     pub struct Database {
+        #[config(env = "APP_DATABASE_URL")]
         pub url: String,
         #[config(env = "APP_DATABASE_POOL_SIZE")]
         pub pool_size: u32,
+        #[config(env = "APP_DATABASE_TIMEOUT_SECS")]
         pub timeout_secs: u64,
     }
 }
