@@ -133,7 +133,7 @@ impl<T: FromNode> Loader<T> {
             (self.on_warning)(warning);
         }
 
-        T::from_node(&merged)
+        T::from_node_owned(merged)
     }
 }
 

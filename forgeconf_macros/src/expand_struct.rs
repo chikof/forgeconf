@@ -44,6 +44,26 @@ impl FieldDef {
     }
 }
 
+/// Whether the owned conversion reads these fields identically to the
+/// borrowed one. It takes each child out of the table, so a flattened field
+/// (which needs the whole node) rules it out, and so does a case-insensitive
+/// field whose names match another field's names ignoring case: that field
+/// would find a taken placeholder where the borrowed read finds the value.
+pub(crate) fn owned_supported(fields: &[FieldDef]) -> bool {
+    let keyed: Vec<&FieldDef> = fields.iter().filter(|f| f.is_keyed()).collect();
+    if fields.iter().any(|f| f.attrs.flatten) {
+        return false;
+    }
+    keyed.iter().enumerate().all(|(i, a)| {
+        keyed.iter().enumerate().all(|(j, b)| {
+            i == j
+                || !(a.attrs.insensitive || b.attrs.insensitive)
+                || a.names()
+                    .all(|x| b.names().all(|y| !x.eq_ignore_ascii_case(&y)))
+        })
+    })
+}
+
 pub(crate) fn doc_string(attrs: &[Attribute]) -> Option<String> {
     let lines: Vec<String> = attrs
         .iter()
@@ -152,7 +172,7 @@ fn validate_tokens(field: &FieldDef) -> TokenStream {
     }
 }
 
-fn field_stmt(index: usize, field: &FieldDef) -> TokenStream {
+fn field_stmt(index: usize, field: &FieldDef, owned: bool) -> TokenStream {
     let var = quote::format_ident!("__f{}", index);
     let ty = &field.ty;
     if field.attrs.flatten {
@@ -163,11 +183,26 @@ fn field_stmt(index: usize, field: &FieldDef) -> TokenStream {
     let names = field.names();
     let insensitive = field.attrs.insensitive;
     let default = default_tokens(field);
-    let validate = validate_tokens(field);
     let redact = field
         .attrs
         .sensitive
         .then(|| quote!(.map_err(::forgeconf::ConfigError::redacted)));
+    if owned {
+        let read = if field.attrs.validators.is_empty() {
+            quote! {
+                ::forgeconf::__private::field_owned::<#ty>(&mut __owned, &[#(#names),*], #insensitive, #default)
+            }
+        } else {
+            let validate = validate_tokens(field);
+            quote! {
+                ::forgeconf::__private::field_owned_validated::<#ty>(&mut __owned, &[#(#names),*], #insensitive, #default, #validate)
+            }
+        };
+        return quote! {
+            let #var = __errors.take(#read #redact);
+        };
+    }
+    let validate = validate_tokens(field);
     quote! {
         let #var = __errors.take(
             ::forgeconf::__private::field::<#ty>(node, __table, &[#(#names),*], #insensitive, #default, #validate)
@@ -177,12 +212,14 @@ fn field_stmt(index: usize, field: &FieldDef) -> TokenStream {
 }
 
 /// Statements plus tail expression reading `fields` from `node` / `__table`
-/// and building `ctor { .. }`. The tail has type `Result<_, ConfigError>`.
+/// (or, when `owned`, from the `__owned` table being consumed) and building
+/// `ctor { .. }`. The tail has type `Result<_, ConfigError>`.
 pub(crate) fn from_table(
     fields: &[FieldDef],
     ctor: &TokenStream,
     deny_unknown_fields: bool,
     validators: &[Expr],
+    owned: bool,
 ) -> TokenStream {
     let mut stmts = Vec::new();
     let mut vars = Vec::new();
@@ -194,7 +231,7 @@ pub(crate) fn from_table(
             continue;
         }
         let var = quote::format_ident!("__f{}", index);
-        stmts.push(field_stmt(index, field));
+        stmts.push(field_stmt(index, field, owned));
         inits.push(quote!(#ident: #var));
         vars.push(var);
     }
@@ -204,7 +241,8 @@ pub(crate) fn from_table(
             .iter()
             .filter(|f| f.is_keyed() && f.attrs.insensitive)
             .flat_map(FieldDef::names);
-        quote!(::forgeconf::__private::unknown_keys(__table, &[#(#known),*], &[#(#insensitive),*], &mut __errors);)
+        let table = if owned { quote!(__owned.table()) } else { quote!(__table) };
+        quote!(::forgeconf::__private::unknown_keys(#table, &[#(#known),*], &[#(#insensitive),*], &mut __errors);)
     });
     let build = quote! {
         let __value = #ctor { #(#inits),* };
@@ -379,7 +417,19 @@ fn named_struct(input: &DeriveInput, named: &FieldsNamed, errors: &mut Errors) -
         }
     }
     let deny = attrs.deny_unknown_fields.is_some();
-    let body = from_table(&fields, &quote!(Self), deny, &attrs.validators);
+    let body = from_table(&fields, &quote!(Self), deny, &attrs.validators, false);
+    let owned = owned_supported(&fields).then(|| {
+        let body = from_table(&fields, &quote!(Self), deny, &attrs.validators, true);
+        quote! {
+            fn from_node_owned(
+                node: ::forgeconf::ConfigNode,
+            ) -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+                #[allow(unused_mut)]
+                let mut __owned = ::forgeconf::__private::OwnedTable::new(node, #name)?;
+                #body
+            }
+        }
+    });
     let statics = struct_info_statics(
         &quote::format_ident!("__FIELDS"),
         &quote::format_ident!("__INFO"),
@@ -403,6 +453,8 @@ fn named_struct(input: &DeriveInput, named: &FieldsNamed, errors: &mut Errors) -
                 #body
             }
 
+            #owned
+
             fn shape() -> ::forgeconf::Shape {
                 #statics
                 ::forgeconf::Shape::Struct(&__INFO)
@@ -421,6 +473,19 @@ fn newtype(input: &DeriveInput, unnamed: &syn::FieldsUnnamed, errors: &mut Error
     let field_attrs = field_attrs(&field.attrs, true, errors);
     let validators = &field_attrs.validators;
     let config = config_impl(ident, &attrs.files);
+    let owned_body = if validators.is_empty() {
+        quote!(<#inner as ::forgeconf::FromNode>::from_node_owned(node).map(Self))
+    } else {
+        quote! {
+            let __origin = node.origin().cloned();
+            let __value = <#inner as ::forgeconf::FromNode>::from_node_owned(node)?;
+            #(
+                (#validators)(&__value)
+                    .map_err(|e: ::forgeconf::ConfigError| e.with_origin(__origin.as_ref()))?;
+            )*
+            ::core::result::Result::Ok(Self(__value))
+        }
+    };
     quote! {
         #[automatically_derived]
         impl ::forgeconf::FromNode for #ident {
@@ -433,6 +498,12 @@ fn newtype(input: &DeriveInput, unnamed: &syn::FieldsUnnamed, errors: &mut Error
                         .map_err(|e: ::forgeconf::ConfigError| e.with_origin(node.origin()))?;
                 )*
                 ::core::result::Result::Ok(Self(__value))
+            }
+
+            fn from_node_owned(
+                node: ::forgeconf::ConfigNode,
+            ) -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+                #owned_body
             }
 
             fn from_missing() -> ::core::option::Option<Self> {

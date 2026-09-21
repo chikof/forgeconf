@@ -1,9 +1,10 @@
 //! Helpers called by `#[derive(Config)]` output. Not public API.
 
 use std::collections::BTreeMap;
+use std::mem;
 
 use crate::suggest::suggest;
-use crate::{ConfigError, ConfigNode, ErrorKind, FromNode, Shape, Table, Warning};
+use crate::{ConfigError, ConfigNode, ErrorKind, FromNode, Origin, Shape, Table, Warning};
 
 /// The table behind `node`; null stands for an empty table so a struct whose
 /// fields all have defaults loads from nothing.
@@ -16,6 +17,71 @@ pub fn table<'a>(node: &'a ConfigNode, type_name: &'static str) -> Result<&'a Ta
         ConfigError::mismatch(format!("table for {type_name}"), node.kind())
             .with_origin(node.origin())
     })
+}
+
+/// The table of a node being consumed: fields are moved out of it, leaving
+/// null placeholders so the key set stays intact for [`unknown_keys`].
+#[derive(Debug)]
+pub struct OwnedTable {
+    table: Table,
+    origin: Option<Origin>,
+}
+
+impl OwnedTable {
+    /// Same acceptance as [`table`]: a table, or null as an empty table.
+    ///
+    /// # Errors
+    ///
+    /// A mismatch against `type_name` for any other kind.
+    pub fn new(node: ConfigNode, type_name: &'static str) -> Result<Self, ConfigError> {
+        match node.into_table() {
+            Ok((table, origin)) => Ok(Self { table, origin }),
+            Err(node) => {
+                table(&node, type_name)?;
+                Ok(Self { table: Table::new(), origin: node.origin })
+            },
+        }
+    }
+
+    /// The entries, including the placeholders of fields already taken.
+    #[must_use]
+    pub fn table(&self) -> &Table {
+        &self.table
+    }
+}
+
+/// What an externally tagged enum node holds.
+#[derive(Debug)]
+#[allow(clippy::exhaustive_enums, reason = "matched exhaustively by derive output")]
+pub enum Single {
+    /// A table with exactly one entry.
+    Entry(String, ConfigNode),
+    /// Anything that is not a table.
+    Other(ConfigNode),
+}
+
+/// Split an externally tagged enum node into its only entry.
+///
+/// # Errors
+///
+/// A mismatch when `node` is a table with any other number of entries.
+pub fn single_entry(node: ConfigNode) -> Result<Single, ConfigError> {
+    match node.into_table() {
+        Ok((mut table, origin)) => {
+            let len = table.len();
+            if len == 1 {
+                if let Some((key, value)) = table.pop_first() {
+                    return Ok(Single::Entry(key, value));
+                }
+            }
+            Err(ConfigError::mismatch(
+                "table with exactly one key",
+                format!("table with {len} keys"),
+            )
+            .with_origin(origin.as_ref()))
+        },
+        Err(node) => Ok(Single::Other(node)),
+    }
 }
 
 /// First present, non-null child among `keys`; exact match, or ASCII
@@ -61,6 +127,83 @@ pub fn field<T: FromNode>(
             .at_key(name)
             .with_origin(parent.origin())
     })
+}
+
+/// Move the first present, non-null child among `keys` out of `table`; same
+/// matching as [`lookup`].
+fn take(table: &mut Table, keys: &[&str], insensitive: bool) -> Option<ConfigNode> {
+    keys.iter().find_map(|key| {
+        let child = if insensitive {
+            table
+                .iter_mut()
+                .filter(|(k, _)| k.eq_ignore_ascii_case(key))
+                .map(|(_, child)| child)
+                .find(|child| !child.is_null())
+        } else {
+            table.get_mut(*key).filter(|child| !child.is_null())
+        };
+        child.map(|child| mem::replace(child, ConfigNode::null()))
+    })
+}
+
+#[inline(always)]
+fn field_owned_with<T: FromNode, V: Fn(&T) -> Result<(), ConfigError>>(
+    parent: &mut OwnedTable,
+    keys: &[&str],
+    insensitive: bool,
+    default: Option<fn() -> T>,
+    validate: Option<V>,
+) -> Result<T, ConfigError> {
+    let name = keys.first().copied().unwrap_or_default();
+    if let Some(child) = take(&mut parent.table, keys, insensitive) {
+        let origin = validate.as_ref().and_then(|_| child.origin.clone());
+        let value = T::from_node_owned(child).map_err(|e| e.at_key(name))?;
+        if let Some(validate) = validate {
+            validate(&value).map_err(|e| e.with_origin(origin.as_ref()).at_key(name))?;
+        }
+        return Ok(value);
+    }
+    if let Some(default) = default {
+        let value = default();
+        if let Some(validate) = validate {
+            validate(&value).map_err(|e| e.at_key(name))?;
+        }
+        return Ok(value);
+    }
+    T::from_missing().ok_or_else(|| {
+        ConfigError::missing()
+            .at_key(name)
+            .with_origin(parent.origin.as_ref())
+    })
+}
+
+/// [`field`] for a table being consumed, without validators.
+///
+/// # Errors
+///
+/// The same errors as [`field`].
+pub fn field_owned<T: FromNode>(
+    parent: &mut OwnedTable,
+    keys: &[&str],
+    insensitive: bool,
+    default: Option<fn() -> T>,
+) -> Result<T, ConfigError> {
+    field_owned_with(parent, keys, insensitive, default, None::<fn(&T) -> Result<(), ConfigError>>)
+}
+
+/// [`field`] for a table being consumed, with a validator.
+///
+/// # Errors
+///
+/// The same errors as [`field`].
+pub fn field_owned_validated<T: FromNode>(
+    parent: &mut OwnedTable,
+    keys: &[&str],
+    insensitive: bool,
+    default: Option<fn() -> T>,
+    validate: impl Fn(&T) -> Result<(), ConfigError>,
+) -> Result<T, ConfigError> {
+    field_owned_with(parent, keys, insensitive, default, Some(validate))
 }
 
 /// Accumulates field errors so one load reports every problem.

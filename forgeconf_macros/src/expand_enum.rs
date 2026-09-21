@@ -9,7 +9,14 @@ use syn::ext::IdentExt;
 use syn::{DataEnum, DeriveInput, Error, Fields, Ident, Type};
 
 use crate::attr::{Errors, enum_attrs, variant_attrs};
-use crate::expand_struct::{FieldDef, doc_string, from_table, parse_fields, struct_info_statics};
+use crate::expand_struct::{
+    FieldDef,
+    doc_string,
+    from_table,
+    owned_supported,
+    parse_fields,
+    struct_info_statics,
+};
 
 enum Kind {
     Unit,
@@ -122,9 +129,22 @@ pub(crate) fn expand(input: &DeriveInput, data: &DataEnum, errors: &mut Errors) 
     let tag = attrs.tag.as_ref().map(syn::LitStr::value);
 
     let from_node = match &tag {
-        Some(tag) => tagged_body(&name, tag, &variants),
-        None => external_body(&name, &variants),
+        Some(tag) => tagged_body(&name, tag, &variants, false),
+        None => external_body(&name, &variants, false),
     };
+    let owned = owned_variants(&variants).then(|| {
+        let body = match &tag {
+            Some(tag) => tagged_body(&name, tag, &variants, true),
+            None => external_body(&name, &variants, true),
+        };
+        quote! {
+            fn from_node_owned(
+                node: ::forgeconf::ConfigNode,
+            ) -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+                #body
+            }
+        }
+    });
     let shape = shape_body(&name, doc_string(&input.attrs).as_deref(), tag.as_deref(), &variants);
 
     quote! {
@@ -136,6 +156,8 @@ pub(crate) fn expand(input: &DeriveInput, data: &DataEnum, errors: &mut Errors) 
                 #from_node
             }
 
+            #owned
+
             fn shape() -> ::forgeconf::Shape {
                 #shape
             }
@@ -143,30 +165,54 @@ pub(crate) fn expand(input: &DeriveInput, data: &DataEnum, errors: &mut Errors) 
     }
 }
 
+/// Whether an owned conversion is worth generating and reads every struct
+/// variant like the borrowed one; unit-only enums gain nothing from it.
+fn owned_variants(variants: &[Variant]) -> bool {
+    variants.iter().any(|v| !matches!(v.kind, Kind::Unit))
+        && variants.iter().all(|v| match &v.kind {
+            Kind::Struct(fields) => owned_supported(fields),
+            _ => true,
+        })
+}
+
 fn struct_variant_body(
     enum_name: &str,
     variant: &Variant,
     fields: &[FieldDef],
     prefixed: bool,
+    owned: bool,
 ) -> TokenStream {
     let id = &variant.ident;
-    let body = from_table(fields, &quote!(Self::#id), false, &[]);
-    if !prefixed {
-        return quote!({ #body });
-    }
+    let body = from_table(fields, &quote!(Self::#id), false, &[], owned);
     let key = &variant.key;
     let type_name = format!("{enum_name}::{}", variant.ident.unraw());
-    quote! {
-        (|| -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
-            let node = __value;
-            let __table = ::forgeconf::__private::table(node, #type_name)?;
+    match (prefixed, owned) {
+        (false, false) => quote!({ #body }),
+        (false, true) => quote! {{
+            #[allow(unused_mut)]
+            let mut __owned = ::forgeconf::__private::OwnedTable::new(node, #enum_name)?;
             #body
-        })()
-        .map_err(|e| e.at_key(#key))
+        }},
+        (true, false) => quote! {
+            (|| -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+                let node = __value;
+                let __table = ::forgeconf::__private::table(node, #type_name)?;
+                #body
+            })()
+            .map_err(|e| e.at_key(#key))
+        },
+        (true, true) => quote! {
+            (|| -> ::core::result::Result<Self, ::forgeconf::ConfigError> {
+                #[allow(unused_mut)]
+                let mut __owned = ::forgeconf::__private::OwnedTable::new(__value, #type_name)?;
+                #body
+            })()
+            .map_err(|e| e.at_key(#key))
+        },
     }
 }
 
-fn external_body(name: &str, variants: &[Variant]) -> TokenStream {
+fn external_body(name: &str, variants: &[Variant], owned: bool) -> TokenStream {
     let units: Vec<&Variant> = variants
         .iter()
         .filter(|v| matches!(v.kind, Kind::Unit))
@@ -177,12 +223,12 @@ fn external_body(name: &str, variants: &[Variant]) -> TokenStream {
         .collect();
 
     let scalar = if units.is_empty() {
-        quote! {
+        quote! {{
             ::core::result::Result::Err(
                 ::forgeconf::ConfigError::mismatch("table with exactly one key", node.kind())
                     .with_origin(node.origin()),
             )
-        }
+        }}
     } else {
         let unit_keys = keys(units.iter().copied());
         let expected = format!("one of: {}", unit_keys.join(", "));
@@ -211,18 +257,36 @@ fn external_body(name: &str, variants: &[Variant]) -> TokenStream {
         let arm = match &v.kind {
             Kind::Newtype(inner) => {
                 let id = &v.ident;
+                let from = if owned { quote!(from_node_owned) } else { quote!(from_node) };
                 quote! {
-                    <#inner as ::forgeconf::FromNode>::from_node(__value)
+                    <#inner as ::forgeconf::FromNode>::#from(__value)
                         .map(Self::#id)
                         .map_err(|e| e.at_key(#key))
                 }
             },
-            Kind::Struct(fields) => struct_variant_body(name, v, fields, true),
+            Kind::Struct(fields) => struct_variant_body(name, v, fields, true, owned),
             Kind::Unit => TokenStream::new(),
         };
         quote!(#pattern => #arm)
     });
     let unknown = unknown_variant(&quote!(__key.as_str()), &quote!(__value.origin()), &quote!());
+    if owned {
+        return quote! {
+            match ::forgeconf::__private::single_entry(node)? {
+                ::forgeconf::__private::Single::Entry(__key, __value) => {
+                    const __EXPECTED: &[&str] = &[#(#data_keys),*];
+                    match __key.as_str() {
+                        #(#arms,)*
+                        _ => #unknown,
+                    }
+                }
+                ::forgeconf::__private::Single::Other(node) => {
+                    let node = &node;
+                    #scalar
+                }
+            }
+        };
+    }
     quote! {
         if let ::core::option::Option::Some(__map) = node.as_table() {
             const __EXPECTED: &[&str] = &[#(#data_keys),*];
@@ -248,22 +312,23 @@ fn external_body(name: &str, variants: &[Variant]) -> TokenStream {
     }
 }
 
-fn tagged_body(name: &str, tag: &str, variants: &[Variant]) -> TokenStream {
+fn tagged_body(name: &str, tag: &str, variants: &[Variant], owned: bool) -> TokenStream {
     let all_keys = keys(variants.iter());
     let expected = format!("one of: {}", all_keys.join(", "));
     let arms = variants.iter().map(|v| {
         let (pattern, id) = (v.pattern(), &v.ident);
         let arm = match &v.kind {
             Kind::Unit => quote!(::core::result::Result::Ok(Self::#id)),
-            Kind::Newtype(inner) => quote! {
-                <#inner as ::forgeconf::FromNode>::from_node(node).map(Self::#id)
+            Kind::Newtype(inner) => {
+                let from = if owned { quote!(from_node_owned) } else { quote!(from_node) };
+                quote!(<#inner as ::forgeconf::FromNode>::#from(node).map(Self::#id))
             },
-            Kind::Struct(fields) => struct_variant_body(name, v, fields, false),
+            Kind::Struct(fields) => struct_variant_body(name, v, fields, false, owned),
         };
-        quote!(#pattern => #arm)
+        (pattern, arm)
     });
     let unknown = unknown_variant(&quote!(__name), &quote!(__tag.origin()), &quote!(.at_key(#tag)));
-    quote! {
+    let lookup = quote! {
         const __EXPECTED: &[&str] = &[#(#all_keys),*];
         let __table = ::forgeconf::__private::table(node, #name)?;
         let __tag = match __table.get(#tag) {
@@ -275,9 +340,40 @@ fn tagged_body(name: &str, tag: &str, variants: &[Variant]) -> TokenStream {
             }
         };
         let __name = ::forgeconf::__private::scalar(__tag, #expected).map_err(|e| e.at_key(#tag))?;
-        match __name {
-            #(#arms,)*
-            _ => #unknown,
+    };
+    if !owned {
+        let arms = arms.map(|(pattern, arm)| quote!(#pattern => #arm));
+        return quote! {
+            #lookup
+            match __name {
+                #(#arms,)*
+                _ => #unknown,
+            }
+        };
+    }
+    // The tag name borrows the node, so pick the variant first and hand the
+    // node over afterwards.
+    let (patterns, arms): (Vec<_>, Vec<_>) = arms.unzip();
+    let picks = patterns
+        .iter()
+        .enumerate()
+        .map(|(index, pattern)| quote!(#pattern => #index));
+    let last = arms.len().saturating_sub(1);
+    let dispatch = arms
+        .iter()
+        .enumerate()
+        .map(|(index, arm)| if index == last { quote!(_ => #arm) } else { quote!(#index => #arm) });
+    quote! {
+        let __variant: usize = {
+            let node = &node;
+            #lookup
+            match __name {
+                #(#picks,)*
+                _ => return #unknown,
+            }
+        };
+        match __variant {
+            #(#dispatch,)*
         }
     }
 }

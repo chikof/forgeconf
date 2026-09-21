@@ -111,7 +111,7 @@ pub(crate) fn parse_source(
 /// Returns a syntax error when `input` is not valid for `format`, or the
 /// error from [`FromNode::from_node`] when the tree does not match `T`.
 pub fn from_str<T: FromNode>(input: &str, format: FileFormat) -> Result<T, ConfigError> {
-    T::from_node(&parse_str(input, format)?)
+    T::from_node_owned(parse_str(input, format)?)
 }
 
 fn infer_from_extension(path: &Path) -> Result<FileFormat, ConfigError> {

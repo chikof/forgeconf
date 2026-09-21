@@ -137,6 +137,30 @@ impl ConfigNode {
             Value::Table(_) => "table",
         }
     }
+
+    /// The text of a scalar node, or the node back when it is not a scalar.
+    pub(crate) fn into_scalar(self) -> Result<String, Self> {
+        match self.value {
+            Value::Scalar(text) => Ok(text),
+            value => Err(Self { value, origin: self.origin }),
+        }
+    }
+
+    /// The items of an array node, or the node back when it is not an array.
+    pub(crate) fn into_array(self) -> Result<Vec<ConfigNode>, Self> {
+        match self.value {
+            Value::Array(items) => Ok(items),
+            value => Err(Self { value, origin: self.origin }),
+        }
+    }
+
+    /// The entries of a table node, or the node back when it is not a table.
+    pub(crate) fn into_table(self) -> Result<(Table, Option<Origin>), Self> {
+        match self.value {
+            Value::Table(table) => Ok((table, self.origin)),
+            value => Err(Self { value, origin: self.origin }),
+        }
+    }
 }
 
 #[cfg(test)]

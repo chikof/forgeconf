@@ -37,6 +37,18 @@ pub trait FromNode: Sized {
     /// type or a value out of range.
     fn from_node(node: &ConfigNode) -> Result<Self, ConfigError>;
 
+    /// Convert an owned `node`, moving text and children out of it instead of
+    /// cloning them. Must give the same value or error as
+    /// [`from_node`](Self::from_node); the default just borrows.
+    ///
+    /// # Errors
+    ///
+    /// The same errors as [`from_node`](Self::from_node).
+    #[doc(hidden)]
+    fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+        Self::from_node(&node)
+    }
+
     /// Value to use when the key is absent or null; `None` means the key is
     /// required.
     #[must_use]
@@ -53,6 +65,10 @@ impl FromNode for ConfigNode {
         Ok(node.clone())
     }
 
+    fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+        Ok(node)
+    }
+
     fn shape() -> Shape {
         Shape::Any
     }
@@ -61,6 +77,13 @@ impl FromNode for ConfigNode {
 impl FromNode for String {
     fn from_node(node: &ConfigNode) -> Result<Self, ConfigError> {
         scalar_text(node, "string").map(str::to_owned)
+    }
+
+    fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+        match node.into_scalar() {
+            Ok(text) => Ok(text),
+            Err(node) => Self::from_node(&node),
+        }
     }
 
     fn shape() -> Shape {
@@ -128,6 +151,10 @@ macro_rules! impl_list {
                     collect_items(node)
                 }
 
+                fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+                    collect_items_owned(node)
+                }
+
                 fn from_missing() -> Option<Self> {
                     Some($ty::new())
                 }
@@ -148,6 +175,10 @@ macro_rules! impl_map {
             impl<K: FromStr $(+ $bound)*, V: FromNode> FromNode for $ty<K, V> {
                 fn from_node(node: &ConfigNode) -> Result<Self, ConfigError> {
                     collect_entries(node)
+                }
+
+                fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+                    collect_entries_owned(node)
                 }
 
                 fn from_missing() -> Option<Self> {
@@ -179,6 +210,18 @@ impl<T: FromNode, const N: usize> FromNode for [T; N] {
             .map_err(|_| mismatch())
     }
 
+    fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+        let Some(items) = node.as_array() else { return Self::from_node(&node) };
+        if items.len() != N {
+            return Self::from_node(&node);
+        }
+        let items = collect_items_owned::<T, Vec<T>>(node)?;
+        let len = items.len();
+        items
+            .try_into()
+            .map_err(|_| ConfigError::mismatch(format!("array of {N} items"), len.to_string()))
+    }
+
     fn shape() -> Shape {
         Shape::List(T::shape)
     }
@@ -190,6 +233,10 @@ macro_rules! impl_pointer {
             impl<T: FromNode> FromNode for $ptr<T> {
                 fn from_node(node: &ConfigNode) -> Result<Self, ConfigError> {
                     T::from_node(node).map($ptr::new)
+                }
+
+                fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+                    T::from_node_owned(node).map($ptr::new)
                 }
 
                 fn from_missing() -> Option<Self> {
@@ -211,6 +258,13 @@ impl FromNode for Box<str> {
         scalar_text(node, "string").map(Box::from)
     }
 
+    fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+        match node.into_scalar() {
+            Ok(text) => Ok(text.into_boxed_str()),
+            Err(node) => Self::from_node(&node),
+        }
+    }
+
     fn shape() -> Shape {
         Shape::Scalar("string")
     }
@@ -229,6 +283,13 @@ impl FromNode for Arc<str> {
 impl FromNode for PathBuf {
     fn from_node(node: &ConfigNode) -> Result<Self, ConfigError> {
         scalar_text(node, "path").map(PathBuf::from)
+    }
+
+    fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+        match node.into_scalar() {
+            Ok(text) => Ok(PathBuf::from(text)),
+            Err(node) => Self::from_node(&node),
+        }
     }
 
     fn shape() -> Shape {
@@ -300,6 +361,10 @@ impl<T: FromNode> FromNode for Option<T> {
         if node.is_null() { Ok(None) } else { T::from_node(node).map(Some) }
     }
 
+    fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
+        if node.is_null() { Ok(None) } else { T::from_node_owned(node).map(Some) }
+    }
+
     fn from_missing() -> Option<Self> {
         Some(None)
     }
@@ -343,6 +408,19 @@ fn collect_items<T: FromNode, C: FromIterator<T>>(node: &ConfigNode) -> Result<C
         .collect()
 }
 
+fn collect_items_owned<T: FromNode, C: FromIterator<T>>(
+    node: ConfigNode,
+) -> Result<C, ConfigError> {
+    match node.into_array() {
+        Ok(items) => items
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| T::from_node_owned(item).map_err(|err| err.at_index(index)))
+            .collect(),
+        Err(node) => collect_items(&node),
+    }
+}
+
 fn collect_entries<K, V, C>(node: &ConfigNode) -> Result<C, ConfigError>
 where
     K: FromStr,
@@ -357,19 +435,45 @@ where
     table
         .iter()
         .map(|(key, child)| {
-            let parsed = key.parse::<K>().map_err(|_| {
-                let expected = std::any::type_name::<K>()
-                    .rsplit("::")
-                    .next()
-                    .unwrap_or("key");
-                ConfigError::mismatch(expected, key.as_str())
-                    .at_key(key)
-                    .with_origin(child.origin())
-            })?;
+            let parsed = key
+                .parse::<K>()
+                .map_err(|_| entry_mismatch::<K>(key, child))?;
             let value = V::from_node(child).map_err(|err| err.at_key(key))?;
             Ok((parsed, value))
         })
         .collect()
+}
+
+fn entry_mismatch<K>(key: &str, child: &ConfigNode) -> ConfigError {
+    let expected = std::any::type_name::<K>()
+        .rsplit("::")
+        .next()
+        .unwrap_or("key");
+    ConfigError::mismatch(expected, key)
+        .at_key(key)
+        .with_origin(child.origin())
+}
+
+fn collect_entries_owned<K, V, C>(node: ConfigNode) -> Result<C, ConfigError>
+where
+    K: FromStr,
+    V: FromNode,
+    C: FromIterator<(K, V)>,
+{
+    match node.into_table() {
+        Ok((table, _)) => {
+            let mut entries = Vec::with_capacity(table.len());
+            for (key, child) in table {
+                let parsed = key
+                    .parse::<K>()
+                    .map_err(|_| entry_mismatch::<K>(&key, &child))?;
+                let value = V::from_node_owned(child).map_err(|err| err.at_key(&key))?;
+                entries.push((parsed, value));
+            }
+            Ok(entries.into_iter().collect())
+        },
+        Err(node) => collect_entries(&node),
+    }
 }
 
 #[cfg(test)]

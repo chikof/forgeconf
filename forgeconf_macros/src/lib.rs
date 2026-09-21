@@ -328,4 +328,60 @@ mod tests {
         assert!(t.contains(".tag(\"type\")"));
         assert!(t.contains("ConfigError::missing().at_key(\"type\")"));
     }
+
+    #[test]
+    fn struct_expansion_reads_owned_tables() {
+        let t = compact(
+            &run("struct S { a: u8, #[config(validate = v)] b: u8, #[config(skip)] c: u8 }")
+                .expect("expands"),
+        );
+        for needle in [
+            "fnfrom_node_owned(node:::forgeconf::ConfigNode,)",
+            "::forgeconf::__private::OwnedTable::new(node,\"S\")?;",
+            "::forgeconf::__private::field_owned::<u8>(&mut__owned,&[\"a\"],false,",
+            "::forgeconf::__private::field_owned_validated::<u8>(&mut__owned,&[\"b\"],false,",
+        ] {
+            assert!(t.contains(needle), "{needle} missing in {t}");
+        }
+    }
+
+    #[test]
+    fn owned_conversion_is_skipped_where_it_would_differ() {
+        let flat = compact(&run("struct S { #[config(flatten)] a: A }").expect("expands"));
+        assert!(!flat.contains("from_node_owned"), "{flat}");
+        let collide = compact(
+            &run("struct S { #[config(insensitive)] a: u8, #[config(rename = \"A\")] b: u8 }")
+                .expect("expands"),
+        );
+        assert!(!collide.contains("from_node_owned"), "{collide}");
+        let units = compact(&run("enum E { A, B }").expect("expands"));
+        assert!(!units.contains("from_node_owned"), "{units}");
+    }
+
+    #[test]
+    fn newtype_and_enum_expansions_consume_owned_nodes() {
+        let t = compact(&run("struct P(#[config(validate = v)] u16);").expect("expands"));
+        assert!(t.contains("<u16as::forgeconf::FromNode>::from_node_owned(node)"));
+        let t = compact(&run("struct P(u16);").expect("expands"));
+        assert!(t.contains("<u16as::forgeconf::FromNode>::from_node_owned(node).map(Self)"));
+        let t = compact(&run("enum E { A, B(u8), C { x: u8 } }").expect("expands"));
+        for needle in [
+            "::forgeconf::__private::single_entry(node)?",
+            "::forgeconf::__private::Single::Entry(__key,__value)",
+            "<u8as::forgeconf::FromNode>::from_node_owned(__value)",
+            "::forgeconf::__private::OwnedTable::new(__value,\"E::C\")?;",
+        ] {
+            assert!(t.contains(needle), "{needle} missing in {t}");
+        }
+        let t = compact(
+            &run("#[config(tag = \"t\")] enum E { A, B(u8), C { x: u8 } }").expect("expands"),
+        );
+        for needle in [
+            "let__variant:usize=",
+            "<u8as::forgeconf::FromNode>::from_node_owned(node).map(Self::B)",
+            "::forgeconf::__private::OwnedTable::new(node,\"E\")?;",
+        ] {
+            assert!(t.contains(needle), "{needle} missing in {t}");
+        }
+    }
 }
