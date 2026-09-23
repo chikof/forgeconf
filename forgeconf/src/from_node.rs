@@ -95,18 +95,29 @@ impl FromNode for bool {
     fn from_node(node: &ConfigNode) -> Result<Self, ConfigError> {
         let text = scalar_text(node, "bool")?;
         let text = text.trim();
-        let accepts = |words: [&str; 4]| words.iter().any(|word| text.eq_ignore_ascii_case(word));
-        if accepts(["true", "1", "yes", "on"]) {
-            Ok(true)
-        } else if accepts(["false", "0", "no", "off"]) {
-            Ok(false)
-        } else {
-            Err(ConfigError::mismatch("bool", text).with_origin(node.origin()))
-        }
+        parse_bool(text)
+            .ok_or_else(|| ConfigError::mismatch("bool", text).with_origin(node.origin()))
     }
 
     fn shape() -> Shape {
         Shape::Bool
+    }
+}
+
+/// `true`/`1`/`yes`/`on` and `false`/`0`/`no`/`off`, ignoring ASCII case.
+/// Dispatching on the length avoids comparing against every word.
+fn parse_bool(text: &str) -> Option<bool> {
+    let is = |word: &str| text.eq_ignore_ascii_case(word);
+    match text.len() {
+        1 if text == "1" => Some(true),
+        1 if text == "0" => Some(false),
+        2 if is("on") => Some(true),
+        2 if is("no") => Some(false),
+        3 if is("yes") => Some(true),
+        3 if is("off") => Some(false),
+        4 if is("true") => Some(true),
+        5 if is("false") => Some(false),
+        _ => None,
     }
 }
 
@@ -386,8 +397,10 @@ fn scalar_text<'a>(node: &'a ConfigNode, expected: &'static str) -> Result<&'a s
 
 fn parse_scalar<T: FromStr>(node: &ConfigNode, expected: &'static str) -> Result<T, ConfigError> {
     let text = scalar_text(node, expected)?;
-    text.trim()
-        .parse()
+    // Every target type rejects surrounding whitespace, so text that parses
+    // as is needs no trim.
+    text.parse()
+        .or_else(|_| text.trim().parse())
         .map_err(|_| ConfigError::mismatch(expected, text).with_origin(node.origin()))
 }
 
@@ -536,6 +549,26 @@ mod test {
         assert!(!bool::from_node(&ConfigNode::scalar(" NO ")).unwrap());
         assert!(bool::from_node(&ConfigNode::scalar("1")).unwrap());
         assert!(!bool::from_node(&ConfigNode::scalar("off")).unwrap());
+    }
+
+    #[test]
+    fn bool_words_in_any_case() {
+        for word in ["true", "TRUE", "True", "1", "yes", "YeS", "on", "ON"] {
+            assert_eq!(parse_bool(word), Some(true), "{word}");
+        }
+        for word in ["false", "FALSE", "0", "no", "No", "off", "OFF", "oFf"] {
+            assert_eq!(parse_bool(word), Some(false), "{word}");
+        }
+        for word in ["", "2", "y", "n", "yess", "tru", "falsee", "truee", "of", "o", "nope"] {
+            assert_eq!(parse_bool(word), None, "{word:?}");
+        }
+    }
+
+    #[test]
+    fn numeric_trims_unicode_whitespace() {
+        assert_eq!(u8::from_node(&ConfigNode::scalar("\u{a0}7\u{2003}")).unwrap(), 7);
+        assert_eq!(u8::from_node(&ConfigNode::scalar("7")).unwrap(), 7);
+        assert!(u8::from_node(&ConfigNode::scalar("7 8")).is_err());
     }
 
     #[test]
