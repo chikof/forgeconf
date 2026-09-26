@@ -192,6 +192,13 @@ impl Leaves {
     fn into_table(self) -> Table {
         match self {
             Self::Map(map) => map,
+            Self::List { items, .. } if items.len() <= 8 => {
+                let mut table = Table::new();
+                for (name, node) in items {
+                    table.insert(name, node);
+                }
+                table
+            },
             Self::List { items, .. } => items.into_iter().collect(),
         }
     }
@@ -469,8 +476,11 @@ fn parse_key_part<'a>(c: &mut Cursor<'a>) -> Result<KeyPart<'a>, ConfigError> {
         Some(b'\'') => literal_string(c)?,
         Some(b) if is_bare_key(b) => {
             let rest = c.rest();
-            let n = rest.bytes().take_while(|&b| is_bare_key(b)).count();
-            c.advance(n);
+            let n = rest
+                .bytes()
+                .position(|b| !is_bare_key(b))
+                .unwrap_or(rest.len());
+            c.advance_flat(n);
             Cow::Borrowed(rest.get(..n).unwrap_or(""))
         },
         _ => return Err(c.error(FORMAT, "expected a key")),
@@ -479,14 +489,25 @@ fn parse_key_part<'a>(c: &mut Cursor<'a>) -> Result<KeyPart<'a>, ConfigError> {
 }
 
 fn is_bare_key(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
+    BARE_KEY[usize::from(b)]
 }
+
+static BARE_KEY: [bool; 256] = {
+    let mut table = [false; 256];
+    let mut i = 0;
+    while i < 256 {
+        let b = i as u8;
+        table[i] = b.is_ascii_alphanumeric() || b == b'_' || b == b'-';
+        i += 1;
+    }
+    table
+};
 
 /// Parse `[key]` or `[[key]]`; the flag is true for an array of tables.
 fn parse_header<'a>(c: &mut Cursor<'a>) -> Result<(Key<'a>, bool), ConfigError> {
     let is_array = c.eat("[[");
     if !is_array {
-        c.bump();
+        c.skip_flat();
     }
     let key = parse_key(c)?;
     skip_ws(c);
@@ -511,7 +532,7 @@ fn skip_ws(c: &mut Cursor<'_>) {
         .bytes()
         .take_while(|b| matches!(b, b' ' | b'\t'))
         .count();
-    c.advance(n);
+    c.advance_flat(n);
 }
 
 fn eat_newline(c: &mut Cursor<'_>) -> bool {
@@ -546,9 +567,9 @@ fn skip_comment(c: &mut Cursor<'_>) -> Result<(), ConfigError> {
     let n = c
         .rest()
         .bytes()
-        .position(|b| b == b'\n' || (b < b' ' && b != b'\t') || b == 0x7f)
+        .position(|b| CONTROL[usize::from(b)])
         .unwrap_or(c.rest().len());
-    c.advance(n);
+    c.advance_flat(n);
     if c.peek().is_none_or(|b| b == b'\n') || at_newline(c) {
         Ok(())
     } else {
@@ -587,7 +608,7 @@ fn expect(c: &mut Cursor<'_>, token: &str, what: &str) -> Result<(), ConfigError
 fn eat_byte(c: &mut Cursor<'_>, byte: u8) -> bool {
     let found = c.peek() == Some(byte);
     if found {
-        c.bump();
+        c.skip_flat();
     }
     found
 }
@@ -628,7 +649,7 @@ fn parse_value(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
 
 fn parse_array(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
     c.enter(FORMAT)?;
-    c.bump();
+    c.skip_flat();
     let mut items = Vec::new();
     loop {
         skip_ws_newlines_comments(c)?;
@@ -652,7 +673,7 @@ fn parse_array(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
 fn parse_inline_table(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
     c.enter(FORMAT)?;
     let mut table = TableSlot::new(c.origin(), State::Header);
-    c.bump();
+    c.skip_flat();
     skip_ws(c);
     if !eat_byte(c, b'}') {
         loop {
@@ -697,7 +718,7 @@ fn parse_scalar(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
         && c.peek_at(1).is_some_and(|b| b.is_ascii_digit())
         && is_date(c.slice_from(start).as_bytes())
     {
-        c.bump();
+        c.skip_flat();
         take_token(c);
     }
     let text = c.slice_from(start);
@@ -710,12 +731,12 @@ fn parse_scalar(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
 }
 
 fn take_token(c: &mut Cursor<'_>) {
-    while c
-        .peek()
-        .is_some_and(|b| !matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b',' | b']' | b'}' | b'#'))
-    {
-        c.bump();
-    }
+    let rest = c.rest();
+    let n = rest
+        .bytes()
+        .position(|b| TOKEN_END[usize::from(b)])
+        .unwrap_or(rest.len());
+    c.advance_flat(n);
 }
 
 // ---------------------------------------------------------------------------
@@ -727,17 +748,38 @@ fn take_token(c: &mut Cursor<'_>) {
 /// character other than tab.
 fn plain_run(rest: &str, quote: u8, escapes: bool) -> usize {
     rest.bytes()
-        .position(|b| {
-            b == quote || (escapes && b == b'\\') || (b < b' ' && b != b'\t') || b == 0x7f
-        })
+        .position(|b| b == quote || (escapes && b == b'\\') || CONTROL[usize::from(b)])
         .unwrap_or(rest.len())
 }
+
+/// Control characters other than tab, which strings and comments reject.
+static CONTROL: [bool; 256] = {
+    let mut table = [false; 256];
+    let mut i = 0;
+    while i < 256 {
+        table[i] = (i < 0x20 && i != 0x09) || i == 0x7f;
+        i += 1;
+    }
+    table
+};
+
+/// Bytes that end a bare value token.
+static TOKEN_END: [bool; 256] = {
+    let mut table = [false; 256];
+    let ends = *b" \t\r\n,]}#";
+    let mut i = 0;
+    while i < ends.len() {
+        table[ends[i] as usize] = true;
+        i += 1;
+    }
+    table
+};
 
 /// Consume the plain run at the cursor and return it.
 fn take_plain_run<'a>(c: &mut Cursor<'a>, quote: u8, escapes: bool) -> &'a str {
     let rest = c.rest();
     let n = plain_run(rest, quote, escapes);
-    c.advance(n);
+    c.advance_flat(n);
     rest.get(..n).unwrap_or("")
 }
 
@@ -751,21 +793,21 @@ fn string_stop(c: &Cursor<'_>) -> ConfigError {
 }
 
 fn basic_string<'a>(c: &mut Cursor<'a>) -> Result<Cow<'a, str>, ConfigError> {
-    c.bump();
+    c.skip_flat();
     let first = take_plain_run(c, b'"', true);
     if c.peek() == Some(b'"') {
-        c.bump();
+        c.skip_flat();
         return Ok(Cow::Borrowed(first));
     }
     let mut out = String::from(first);
     loop {
         match c.peek() {
             Some(b'"') => {
-                c.bump();
+                c.skip_flat();
                 return Ok(Cow::Owned(out));
             },
             Some(b'\\') => {
-                c.bump();
+                c.skip_flat();
                 out.push(escape(c)?);
             },
             _ => return Err(string_stop(c)),
@@ -775,10 +817,10 @@ fn basic_string<'a>(c: &mut Cursor<'a>) -> Result<Cow<'a, str>, ConfigError> {
 }
 
 fn literal_string<'a>(c: &mut Cursor<'a>) -> Result<Cow<'a, str>, ConfigError> {
-    c.bump();
+    c.skip_flat();
     let text = take_plain_run(c, b'\'', false);
     if c.peek() == Some(b'\'') {
-        c.bump();
+        c.skip_flat();
         Ok(Cow::Borrowed(text))
     } else {
         Err(string_stop(c))
@@ -1113,6 +1155,19 @@ mod test {
 
     fn s(text: &str) -> ConfigNode {
         ConfigNode::scalar(text)
+    }
+
+    #[test]
+    fn columns_count_characters_across_flat_runs() {
+        let doc = parse("\"é\" = \"ü€\" # ñ\n\"kéy\" = 42 # ö", "t").unwrap();
+        let at = |key: &str| {
+            let origin = doc.get(key).unwrap().origin().unwrap();
+            (origin.line(), origin.column())
+        };
+        assert_eq!(at("é"), (1, 7));
+        assert_eq!(at("kéy"), (2, 9));
+        let err = parse("a = 1 # ü\nb = 08", "t").unwrap_err();
+        assert!(err.to_string().ends_with("(t:2:5)"), "{err}");
     }
 
     fn t(entries: Vec<(&str, ConfigNode)>) -> ConfigNode {

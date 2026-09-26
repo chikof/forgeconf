@@ -21,6 +21,9 @@ pub(crate) fn env_node(
         match value {
             Ok(text) => {
                 label.clear();
+                if label.capacity() == 0 {
+                    label.reserve(64);
+                }
                 label.push_str("env:");
                 label.push_str(name);
                 insert(&mut root, path, leaf_node(leaf_shape, &label, &text));

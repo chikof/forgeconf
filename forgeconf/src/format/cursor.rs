@@ -97,6 +97,26 @@ impl<'a> Cursor<'a> {
         self.pos = end;
     }
 
+    /// [`Cursor::advance`] for `len` bytes known to hold no newline: only the
+    /// column moves, by the number of characters.
+    #[cfg(feature = "toml")]
+    pub(crate) fn advance_flat(&mut self, len: usize) {
+        let end = self.pos.saturating_add(len).min(self.src.len());
+        let skipped = &self.src.as_bytes()[self.pos..end];
+        self.column += skipped
+            .iter()
+            .fold(0, |n, &byte| n + u32::from(byte & 0xC0 != 0x80));
+        self.pos = end;
+    }
+
+    /// Consume the next byte, which the caller peeked and knows to be an ASCII
+    /// character other than a newline.
+    #[cfg(feature = "toml")]
+    pub(crate) fn skip_flat(&mut self) {
+        self.pos += 1;
+        self.column += 1;
+    }
+
     // UTF-8 continuation bytes do not start a character, so they add no column.
     fn step(&mut self, byte: u8) {
         if byte == b'\n' {
