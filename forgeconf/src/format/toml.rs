@@ -125,13 +125,17 @@ enum Child {
     Array(ArraySlot),
 }
 
+/// Small tables stay a map; one with this many entries becomes a list.
+const MAP_MAX: usize = 12;
+
 /// Up to this many unsorted entries are searched linearly.
 const LINEAR_MAX: usize = 16;
 
-/// Name-to-node entries of one table. Documents mostly list keys in sorted
-/// order, and the generators of large ones always do, so entries are kept in
-/// a plain list while they stay strictly ascending (one comparison per
-/// insert, no tree rebalancing) and become a map only once they do not.
+/// Name-to-node entries of one table. Few entries go straight into a map.
+/// Documents mostly list keys in sorted order, and the generators of large
+/// ones always do, so past [`MAP_MAX`] entries are kept in a plain list while
+/// they stay strictly ascending (one comparison per insert, no tree
+/// rebalancing) and become a map again only once they do not.
 #[derive(Debug)]
 enum Leaves {
     List {
@@ -157,6 +161,13 @@ impl Leaves {
 
     /// Add `name`; false, with nothing added, when it is already present.
     fn insert(&mut self, name: &str, node: ConfigNode) -> bool {
+        if let Self::Map(map) = self {
+            if map.len() != MAP_MAX {
+                return Self::insert_map(map, name, node);
+            }
+            let items = std::mem::take(map).into_iter().collect();
+            *self = Self::List { items, sorted: true };
+        }
         if let Self::List { items, sorted } = self {
             if *sorted {
                 match items.last().map(|(last, _)| last.as_str().cmp(name)) {
@@ -178,27 +189,24 @@ impl Leaves {
             *self = Self::Map(std::mem::take(items).into_iter().collect());
         }
         match self {
-            Self::Map(map) => match map.entry(String::from(name)) {
-                Entry::Occupied(_) => false,
-                Entry::Vacant(slot) => {
-                    slot.insert(node);
-                    true
-                },
-            },
+            Self::Map(map) => Self::insert_map(map, name, node),
             Self::List { .. } => false,
+        }
+    }
+
+    fn insert_map(map: &mut Table, name: &str, node: ConfigNode) -> bool {
+        match map.entry(String::from(name)) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(slot) => {
+                slot.insert(node);
+                true
+            },
         }
     }
 
     fn into_table(self) -> Table {
         match self {
             Self::Map(map) => map,
-            Self::List { items, .. } if items.len() <= 8 => {
-                let mut table = Table::new();
-                for (name, node) in items {
-                    table.insert(name, node);
-                }
-                table
-            },
             Self::List { items, .. } => items.into_iter().collect(),
         }
     }
@@ -207,7 +215,7 @@ impl Leaves {
 impl TableSlot {
     fn new(origin: Origin, state: State) -> Self {
         Self {
-            leaves: Leaves::List { items: Vec::new(), sorted: true },
+            leaves: Leaves::Map(Table::new()),
             children: BTreeMap::new(),
             state,
             origin,
@@ -1155,6 +1163,38 @@ mod test {
 
     fn s(text: &str) -> ConfigNode {
         ConfigNode::scalar(text)
+    }
+    #[test]
+    fn tables_of_every_size_keep_keys_and_reject_duplicates() {
+        for len in 1..40_usize {
+            let orders: [Vec<usize>; 3] = [
+                (0..len).collect(),
+                (0..len).rev().collect(),
+                (0..len).map(|i| (i * 7) % len).collect(),
+            ];
+            for order in orders {
+                let mut seen = std::collections::BTreeSet::new();
+                let order: Vec<usize> = order.into_iter().filter(|i| seen.insert(*i)).collect();
+                let text: String = order.iter().map(|i| format!("k{i:03} = {i}\n")).collect();
+                let node = parse(&text, "t").unwrap();
+                let table = node.as_table().unwrap();
+                assert_eq!(table.len(), order.len(), "{len}");
+                for i in &order {
+                    assert_eq!(
+                        node.get(&format!("k{i:03}")).unwrap().as_str(),
+                        Some(i.to_string().as_str())
+                    );
+                }
+                for dup in &order {
+                    let err = parse(&format!("{text}k{dup:03} = 0\n"), "t").unwrap_err();
+                    assert!(
+                        err.to_string()
+                            .contains(&format!("duplicate key \"k{dup:03}\"")),
+                        "{err}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
