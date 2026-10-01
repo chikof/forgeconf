@@ -266,7 +266,7 @@ fn string_run_len(bytes: &[u8]) -> usize {
 }
 
 fn parse_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
-    c.advance(1);
+    c.advance_flat(1);
     let mut out = String::new();
     loop {
         let rest = c.rest();
@@ -283,20 +283,20 @@ fn parse_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
                     out.push_str(run);
                     out
                 };
-                c.advance(len + 1);
+                c.advance_flat(len + 1);
                 return Ok(text);
             },
             Some(b'\\') => {
                 out.push_str(run);
-                c.advance(len + 1);
+                c.advance_flat(len + 1);
                 out.push(parse_escape(c)?);
             },
             Some(_) => {
-                c.advance(len);
+                c.advance_flat(len);
                 return Err(c.error(FORMAT, "control character in string"));
             },
             None => {
-                c.advance(len);
+                c.advance_flat(len);
                 return Err(c.error(FORMAT, "unterminated string"));
             },
         }
@@ -395,13 +395,13 @@ fn parse_number(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
             n => end += n,
         }
     }
-    c.advance(end);
+    c.advance_flat(end);
     Ok(rest.get(..end).unwrap_or("").to_owned())
 }
 
 /// The error for a missing digit `offset` bytes into the number.
 fn number_error(c: &mut Cursor<'_>, offset: usize) -> ConfigError {
-    c.advance(offset);
+    c.advance_flat(offset);
     unexpected(c, "a digit")
 }
 
