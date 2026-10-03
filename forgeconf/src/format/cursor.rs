@@ -111,11 +111,12 @@ impl<'a> Cursor<'a> {
 
     /// Consume the next byte, which the caller peeked and knows to be an ASCII
     /// character other than a newline.
-    #[cfg(feature = "toml")]
+    #[cfg(any(feature = "toml", feature = "json"))]
     pub(crate) fn skip_flat(&mut self) {
         self.pos += 1;
         self.column += 1;
     }
+
     // UTF-8 continuation bytes do not start a character, so they add no column.
     fn step(&mut self, byte: u8) {
         if byte == b'\n' {

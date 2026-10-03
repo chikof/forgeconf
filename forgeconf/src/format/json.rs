@@ -45,8 +45,14 @@ pub(crate) fn parse(input: &str, source: &str) -> Result<ConfigNode, ConfigError
 }
 
 fn skip_ws(c: &mut Cursor<'_>) {
-    while matches!(c.peek(), Some(b' ' | b'\t' | b'\n' | b'\r')) {
-        c.bump();
+    while let Some(byte) = c.peek() {
+        match byte {
+            b' ' | b'\t' | b'\r' => c.skip_flat(),
+            b'\n' => {
+                c.bump();
+            },
+            _ => break,
+        }
     }
 }
 
@@ -85,7 +91,7 @@ fn unexpected(c: &Cursor<'_>, expected: &str) -> ConfigError {
 
 fn expect(c: &mut Cursor<'_>, byte: u8, expected: &str) -> Result<(), ConfigError> {
     if c.peek() == Some(byte) {
-        c.bump();
+        c.skip_flat();
         Ok(())
     } else {
         Err(unexpected(c, expected))
@@ -97,11 +103,11 @@ fn expect(c: &mut Cursor<'_>, byte: u8, expected: &str) -> Result<(), ConfigErro
 /// after its second occurrence, so every failure path checks the members read
 /// so far (`fail`).
 fn parse_object(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, ConfigError> {
-    c.bump();
+    c.skip_flat();
     let start = doc.stack.len();
     skip_ws(c);
     if c.peek() == Some(b'}') {
-        c.bump();
+        c.skip_flat();
         return Ok(ConfigNode::table(Table::new()));
     }
     loop {
@@ -128,10 +134,10 @@ fn parse_object(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, Con
         skip_ws(c);
         match c.peek() {
             Some(b',') => {
-                c.bump();
+                c.skip_flat();
             },
             Some(b'}') => {
-                c.bump();
+                c.skip_flat();
                 return build_table(doc, start).map(ConfigNode::table);
             },
             _ => {
@@ -216,11 +222,11 @@ fn fail(
 }
 
 fn parse_array(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, ConfigError> {
-    c.bump();
+    c.skip_flat();
     let mut items = Vec::new();
     skip_ws(c);
     if c.peek() == Some(b']') {
-        c.bump();
+        c.skip_flat();
         return Ok(ConfigNode::array(items));
     }
     loop {
@@ -229,10 +235,10 @@ fn parse_array(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, Conf
         skip_ws(c);
         match c.peek() {
             Some(b',') => {
-                c.bump();
+                c.skip_flat();
             },
             Some(b']') => {
-                c.bump();
+                c.skip_flat();
                 return Ok(ConfigNode::array(items));
             },
             _ => return Err(unexpected(c, "`,` or `]`")),
