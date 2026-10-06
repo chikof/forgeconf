@@ -33,7 +33,10 @@ struct Entry {
 /// document; a leading UTF-8 BOM is skipped.
 pub(crate) fn parse(input: &str, source: &str) -> Result<ConfigNode, ConfigError> {
     let input = input.strip_prefix('\u{feff}').unwrap_or(input);
-    let mut doc = Doc { input, source, stack: Vec::new() };
+    // About one member per 32 bytes of text, within a bound: this avoids the
+    // regrowth of the stack while it fills, without trusting huge inputs.
+    let stack = Vec::with_capacity((input.len() / 32).min(4096));
+    let mut doc = Doc { input, source, stack };
     let mut cursor = Cursor::new(input, source);
     skip_ws(&mut cursor);
     let node = parse_value(&mut cursor, &mut doc)?;
