@@ -276,27 +276,31 @@ fn string_run_len(bytes: &[u8]) -> usize {
 
 fn parse_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
     c.advance_flat(1);
+    let rest = c.rest();
+    let bytes = rest.as_bytes();
+    let len = string_run_len(bytes);
+    if bytes.get(len) == Some(&b'"') {
+        let text = rest.get(..len).unwrap_or("").to_owned();
+        c.advance_flat(len + 1);
+        return Ok(text);
+    }
+    parse_string_slow(c)
+}
+
+/// The string after its opening quote when it holds an escape or is malformed.
+fn parse_string_slow(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
     let mut out = String::new();
     loop {
         let rest = c.rest();
         let bytes = rest.as_bytes();
         let len = string_run_len(bytes);
-        let run = rest.get(..len).unwrap_or("");
+        out.push_str(rest.get(..len).unwrap_or(""));
         match bytes.get(len) {
             Some(b'"') => {
-                // No escape seen yet: `out` is empty and the run is the whole
-                // string.
-                let text = if out.is_empty() {
-                    run.to_owned()
-                } else {
-                    out.push_str(run);
-                    out
-                };
                 c.advance_flat(len + 1);
-                return Ok(text);
+                return Ok(out);
             },
             Some(b'\\') => {
-                out.push_str(run);
                 c.advance_flat(len + 1);
                 out.push(parse_escape(c)?);
             },
