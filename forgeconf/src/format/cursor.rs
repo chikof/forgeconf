@@ -111,10 +111,18 @@ impl<'a> Cursor<'a> {
 
     /// Consume the next byte, which the caller peeked and knows to be an ASCII
     /// character other than a newline.
-    #[cfg(any(feature = "toml", feature = "json"))]
+    #[cfg(feature = "toml")]
     pub(crate) fn skip_flat(&mut self) {
         self.pos += 1;
         self.column += 1;
+    }
+
+    /// Consume the next `len` bytes, which the caller knows to be ASCII with
+    /// no newline among them, such as the punctuation it just peeked at.
+    #[cfg(feature = "json")]
+    pub(crate) fn advance_ascii(&mut self, len: usize) {
+        self.pos += len;
+        self.column += u32::try_from(len).unwrap_or(u32::MAX);
     }
 
     // UTF-8 continuation bytes do not start a character, so they add no column.

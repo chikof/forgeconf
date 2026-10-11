@@ -50,7 +50,7 @@ pub(crate) fn parse(input: &str, source: &str) -> Result<ConfigNode, ConfigError
 fn skip_ws(c: &mut Cursor<'_>) {
     while let Some(byte) = c.peek() {
         match byte {
-            b' ' | b'\t' | b'\r' => c.skip_flat(),
+            b' ' | b'\t' | b'\r' => c.advance_ascii(1),
             b'\n' => {
                 c.bump();
             },
@@ -94,7 +94,7 @@ fn unexpected(c: &Cursor<'_>, expected: &str) -> ConfigError {
 
 fn expect(c: &mut Cursor<'_>, byte: u8, expected: &str) -> Result<(), ConfigError> {
     if c.peek() == Some(byte) {
-        c.skip_flat();
+        c.advance_ascii(1);
         Ok(())
     } else {
         Err(unexpected(c, expected))
@@ -106,11 +106,11 @@ fn expect(c: &mut Cursor<'_>, byte: u8, expected: &str) -> Result<(), ConfigErro
 /// after its second occurrence, so every failure path checks the members read
 /// so far (`fail`).
 fn parse_object(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, ConfigError> {
-    c.skip_flat();
+    c.advance_ascii(1);
     let start = doc.stack.len();
     skip_ws(c);
     if c.peek() == Some(b'}') {
-        c.skip_flat();
+        c.advance_ascii(1);
         return Ok(ConfigNode::table(Table::new()));
     }
     loop {
@@ -137,10 +137,10 @@ fn parse_object(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, Con
         skip_ws(c);
         match c.peek() {
             Some(b',') => {
-                c.skip_flat();
+                c.advance_ascii(1);
             },
             Some(b'}') => {
-                c.skip_flat();
+                c.advance_ascii(1);
                 return build_table(doc, start).map(ConfigNode::table);
             },
             _ => {
@@ -225,11 +225,11 @@ fn fail(
 }
 
 fn parse_array(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, ConfigError> {
-    c.skip_flat();
+    c.advance_ascii(1);
     let mut items = Vec::new();
     skip_ws(c);
     if c.peek() == Some(b']') {
-        c.skip_flat();
+        c.advance_ascii(1);
         return Ok(ConfigNode::array(items));
     }
     loop {
@@ -238,10 +238,10 @@ fn parse_array(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, Conf
         skip_ws(c);
         match c.peek() {
             Some(b',') => {
-                c.skip_flat();
+                c.advance_ascii(1);
             },
             Some(b']') => {
-                c.skip_flat();
+                c.advance_ascii(1);
                 return Ok(ConfigNode::array(items));
             },
             _ => return Err(unexpected(c, "`,` or `]`")),
@@ -250,38 +250,49 @@ fn parse_array(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, Conf
 }
 
 /// Length of the leading run of `bytes` free of `"`, `\` and control bytes,
-/// found eight bytes at a time. In `has_zero`, the lowest flagged byte is
-/// always a real match, so the first set bit is exact.
-fn string_run_len(bytes: &[u8]) -> usize {
+/// and whether the run is ASCII, found eight bytes at a time. In `has_zero`,
+/// the lowest flagged byte is always a real match, so the first set bit is
+/// exact.
+fn string_run(bytes: &[u8]) -> (usize, bool) {
     const LOW: u64 = 0x0101_0101_0101_0101;
     const HIGH: u64 = 0x8080_8080_8080_8080;
     let has_zero = |x: u64| x.wrapping_sub(LOW) & !x & HIGH;
     let mut at = 0;
+    let mut seen = 0;
     while let Some(chunk) = bytes.get(at..).and_then(<[u8]>::first_chunk::<8>) {
         let word = u64::from_le_bytes(*chunk);
         let hits = has_zero(word ^ (LOW * u64::from(b'"')))
             | has_zero(word ^ (LOW * u64::from(b'\\')))
             | (word.wrapping_sub(LOW * 0x20) & !word & HIGH);
         if hits != 0 {
-            return at + (hits.trailing_zeros() / 8) as usize;
+            let len = (hits.trailing_zeros() / 8) as usize;
+            let run = word & ((1 << (len * 8)) - 1);
+            return (at + len, (seen | run) & HIGH == 0);
         }
+        seen |= word;
         at += 8;
     }
-    bytes
+    let tail = bytes.get(at..).unwrap_or_default();
+    let len = tail
         .iter()
-        .skip(at)
         .position(|&b| b == b'"' || b == b'\\' || b < 0x20)
-        .map_or(bytes.len(), |i| at + i)
+        .unwrap_or(tail.len());
+    let ascii = seen & HIGH == 0 && tail.get(..len).is_some_and(<[u8]>::is_ascii);
+    (at + len, ascii)
 }
 
 fn parse_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
-    c.advance_flat(1);
+    c.advance_ascii(1);
     let rest = c.rest();
     let bytes = rest.as_bytes();
-    let len = string_run_len(bytes);
+    let (len, ascii) = string_run(bytes);
     if bytes.get(len) == Some(&b'"') {
         let text = rest.get(..len).unwrap_or("").to_owned();
-        c.advance_flat(len + 1);
+        if ascii {
+            c.advance_ascii(len + 1);
+        } else {
+            c.advance_flat(len + 1);
+        }
         return Ok(text);
     }
     parse_string_slow(c)
@@ -293,7 +304,7 @@ fn parse_string_slow(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
     loop {
         let rest = c.rest();
         let bytes = rest.as_bytes();
-        let len = string_run_len(bytes);
+        let len = string_run(bytes).0;
         out.push_str(rest.get(..len).unwrap_or(""));
         match bytes.get(len) {
             Some(b'"') => {
@@ -408,13 +419,13 @@ fn parse_number(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
             n => end += n,
         }
     }
-    c.advance_flat(end);
+    c.advance_ascii(end);
     Ok(rest.get(..end).unwrap_or("").to_owned())
 }
 
 /// The error for a missing digit `offset` bytes into the number.
 fn number_error(c: &mut Cursor<'_>, offset: usize) -> ConfigError {
-    c.advance_flat(offset);
+    c.advance_ascii(offset);
     unexpected(c, "a digit")
 }
 
@@ -526,6 +537,8 @@ mod test {
             let text = format!("[\"{body}\", 1]");
             let node = parse(&text, "<string>").unwrap();
             assert_eq!(node.as_array().unwrap()[0].as_str(), Some(body.as_str()), "{len}");
+            let second = node.as_array().unwrap()[1].origin().unwrap();
+            assert_eq!(second.column() as usize, body.chars().count() + 6, "{len}");
             let escaped = format!("\"{body}\\n{body}\"");
             let node = parse(&escaped, "<string>").unwrap();
             assert_eq!(node.as_str(), Some(format!("{body}\n{body}").as_str()), "{len}");
