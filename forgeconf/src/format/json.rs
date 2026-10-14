@@ -172,8 +172,9 @@ fn duplicate_key(input: &str, source: &str, key: &str, pos: usize) -> ConfigErro
 }
 
 /// Table from the members of one object (the stack entries from `start`),
-/// rejecting repeated keys. Keys that already ascend (the usual output of a
-/// serializer) need no sort.
+/// rejecting repeated keys. Large objects are built in bulk, which drops a
+/// repeated key silently; the lost entry is the only sign, and only then are
+/// the keys re-read from the document to find the one to report.
 fn build_table(doc: &mut Doc<'_>, start: usize) -> Result<Table, ConfigError> {
     if doc.stack.len().saturating_sub(start) <= SMALL_TABLE {
         let mut table = Table::new();
@@ -189,18 +190,35 @@ fn build_table(doc: &mut Doc<'_>, start: usize) -> Result<Table, ConfigError> {
         }
         return Ok(table);
     }
-    let members = doc.stack.get_mut(start..).unwrap_or_default();
-    if !members.windows(2).all(|pair| pair[0].key < pair[1].key) {
-        members.sort_by(by_key);
-        if let Some(entry) = earliest_duplicate(members) {
-            return Err(duplicate_key(doc.input, doc.source, &entry.key, entry.pos));
-        }
-    }
-    Ok(doc
+    let positions: Vec<usize> = doc
+        .stack
+        .get(start..)
+        .unwrap_or_default()
+        .iter()
+        .map(|entry| entry.pos)
+        .collect();
+    let table: Table = doc
         .stack
         .drain(start..)
         .map(|entry| (entry.key, entry.node))
-        .collect())
+        .collect();
+    if table.len() == positions.len() {
+        return Ok(table);
+    }
+    let mut entries: Vec<Entry> = positions
+        .iter()
+        .filter_map(|&pos| {
+            let mut at = Cursor::new(doc.input, doc.source);
+            at.advance(pos);
+            let key = parse_string(&mut at).ok()?;
+            Some(Entry { key, node: ConfigNode::null(), pos })
+        })
+        .collect();
+    entries.sort_by(by_key);
+    Err(match earliest_duplicate(&entries) {
+        Some(entry) => duplicate_key(doc.input, doc.source, &entry.key, entry.pos),
+        None => Cursor::new(doc.input, doc.source).error(FORMAT, "duplicate key"),
+    })
 }
 
 /// `err` for a failed object whose members are `members` on the stack, unless
@@ -596,6 +614,22 @@ mod test {
         for (input, message) in cases {
             let err = parse(input, "<string>").unwrap_err();
             assert_eq!(err.to_string(), format!("invalid json: {message}"), "{input}");
+        }
+    }
+
+    #[test]
+    fn duplicate_in_bulk_object_reports_earliest_second_key() {
+        let ascending: Vec<String> = (0..20).map(|i| format!("\"k{i:02}\": 0")).collect();
+        let mut descending = ascending.clone();
+        descending.reverse();
+        for members in [ascending, descending] {
+            let text = format!("{{{}, \"k0\\u0035\": 1, \"k07\": 2}}", members.join(", "));
+            let at = text.find("\"k0\\u0035\"").unwrap() + 1;
+            let err = parse(&text, "<string>").unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                format!("invalid json: duplicate key \"k05\" (<string>:1:{at})")
+            );
         }
     }
 
