@@ -559,7 +559,7 @@ mod test {
         for word in ["false", "FALSE", "0", "no", "No", "off", "OFF", "oFf"] {
             assert_eq!(parse_bool(word), Some(false), "{word}");
         }
-        for word in ["", "2", "y", "n", "yess", "tru", "falsee", "truee", "of", "o", "nope"] {
+        for word in ["", "2", "y", "n", "yess", "trux", "falsee", "truee", "of", "o", "nope"] {
             assert_eq!(parse_bool(word), None, "{word:?}");
         }
     }
