@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::Origin;
+use crate::{Origin, Text};
 
 /// Map of named child nodes.
-pub type Table = BTreeMap<String, ConfigNode>;
+pub type Table = BTreeMap<Text, ConfigNode>;
 
 /// A node of a configuration tree: a [`Value`] plus where it came from.
 #[derive(Clone, Debug, PartialEq)]
@@ -23,7 +23,7 @@ pub enum Value {
     /// Absence of a value.
     Null,
     /// A leaf value stored as text.
-    Scalar(String),
+    Scalar(Text),
     /// An ordered list of child nodes.
     Array(Vec<ConfigNode>),
     /// A map of named child nodes.
@@ -46,7 +46,7 @@ impl ConfigNode {
     }
 
     /// A node holding [`Value::Scalar`].
-    pub fn scalar(s: impl Into<String>) -> Self {
+    pub fn scalar(s: impl Into<Text>) -> Self {
         Self::new(Value::Scalar(s.into()))
     }
 
@@ -139,7 +139,7 @@ impl ConfigNode {
     }
 
     /// The text of a scalar node, or the node back when it is not a scalar.
-    pub(crate) fn into_scalar(self) -> Result<String, Self> {
+    pub(crate) fn into_scalar(self) -> Result<Text, Self> {
         match self.value {
             Value::Scalar(text) => Ok(text),
             value => Err(Self { value, origin: self.origin }),

@@ -45,7 +45,7 @@ impl Fixed {
     fn pairs(pairs: &[(&str, &str)]) -> Self {
         let table: Table = pairs
             .iter()
-            .map(|(key, value)| ((*key).to_owned(), ConfigNode::scalar(*value)))
+            .map(|(key, value)| ((*key).into(), ConfigNode::scalar(*value)))
             .collect();
         Self {
             priority: None,
@@ -55,7 +55,7 @@ impl Fixed {
 
     fn null_port() -> Self {
         let mut table = Table::new();
-        table.insert("port".to_owned(), ConfigNode::null());
+        table.insert("port".into(), ConfigNode::null());
         Self {
             priority: None,
             node: ConfigNode::table(table),

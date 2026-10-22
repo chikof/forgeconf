@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::mem;
 
 use crate::suggest::suggest;
-use crate::{ConfigError, ConfigNode, ErrorKind, FromNode, Origin, Shape, Table, Warning};
+use crate::{ConfigError, ConfigNode, ErrorKind, FromNode, Origin, Shape, Table, Text, Warning};
 
 /// The table behind `node`; null stands for an empty table so a struct whose
 /// fields all have defaults loads from nothing.
@@ -55,7 +55,7 @@ impl OwnedTable {
 #[allow(clippy::exhaustive_enums, reason = "matched exhaustively by derive output")]
 pub enum Single {
     /// A table with exactly one entry.
-    Entry(String, ConfigNode),
+    Entry(Text, ConfigNode),
     /// Anything that is not a table.
     Other(ConfigNode),
 }
@@ -396,7 +396,7 @@ mod test {
         ConfigNode::table(
             pairs
                 .iter()
-                .map(|(k, v)| ((*k).to_owned(), v.clone()))
+                .map(|(k, v)| ((*k).into(), v.clone()))
                 .collect(),
         )
     }

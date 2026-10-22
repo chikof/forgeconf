@@ -248,7 +248,7 @@ mod test {
     impl Static {
         fn new(priority: u8, key: &str, value: &str) -> Self {
             let mut table = Table::new();
-            table.insert(key.to_owned(), ConfigNode::scalar(value));
+            table.insert(key.into(), ConfigNode::scalar(value));
             Self { priority, node: ConfigNode::table(table) }
         }
     }

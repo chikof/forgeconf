@@ -6,7 +6,7 @@ use std::path::Path;
 use super::walk::{Leaf, leaves};
 use crate::help::render_help;
 use crate::suggest::suggest;
-use crate::{ConfigError, ConfigNode, ErrorKind, Origin, Shape, Table};
+use crate::{ConfigError, ConfigNode, ErrorKind, Origin, Shape, Table, Text};
 
 /// The long flag of `leaf`, without the leading `--`: the field's `flag`, else
 /// the path joined by `.` with `_` turned into `-` in each segment.
@@ -36,7 +36,7 @@ pub(crate) fn cli_node(shape: Shape, args: &[OsString]) -> Result<ConfigNode, Co
     let help = || ConfigError::new(ErrorKind::Help(render_help(&program, shape)));
 
     // One slot per leaf: scalars keep the last value, lists collect all.
-    let mut values: Vec<Vec<String>> = vec![Vec::new(); leaves.len()];
+    let mut values: Vec<Vec<Text>> = vec![Vec::new(); leaves.len()];
     let mut tokens = args.iter().skip(1);
     while let Some(token) = tokens.next() {
         let token = token
@@ -54,7 +54,7 @@ pub(crate) fn cli_node(shape: Shape, args: &[OsString]) -> Result<ConfigNode, Co
                 return Err(help());
             }
             match longs.iter().position(|candidate| candidate == name) {
-                Some(index) => (index, inline.map(str::to_owned), format!("--{name}")),
+                Some(index) => (index, inline.map(Text::from), format!("--{name}")),
                 None => {
                     let negated = match inline {
                         None => name.strip_prefix("no-"),
@@ -63,7 +63,7 @@ pub(crate) fn cli_node(shape: Shape, args: &[OsString]) -> Result<ConfigNode, Co
                     .and_then(|rest| longs.iter().position(|candidate| candidate == rest))
                     .filter(|&index| matches!(leaves[index].shape, Shape::Bool));
                     match negated {
-                        Some(index) => (index, Some("false".to_owned()), format!("--{name}")),
+                        Some(index) => (index, Some(Text::from("false")), format!("--{name}")),
                         None => {
                             let candidates = longs.iter().map(String::as_str).chain(["help"]);
                             let mut message = format!("unknown flag --{name}");
@@ -83,7 +83,7 @@ pub(crate) fn cli_node(shape: Shape, args: &[OsString]) -> Result<ConfigNode, Co
                 return Err(help());
             }
             let inline = match rest.strip_prefix('=') {
-                Some(value) => Some(value.to_owned()),
+                Some(value) => Some(Text::from(value)),
                 None if rest.is_empty() => None,
                 None => {
                     return Err(cli_error(format!(
@@ -102,13 +102,13 @@ pub(crate) fn cli_node(shape: Shape, args: &[OsString]) -> Result<ConfigNode, Co
 
         let value = match inline {
             Some(value) => value,
-            None if matches!(leaves[index].shape, Shape::Bool) => "true".to_owned(),
+            None if matches!(leaves[index].shape, Shape::Bool) => Text::from("true"),
             None => tokens
                 .next()
                 .ok_or_else(|| cli_error(format!("flag {name} requires a value")))?
                 .to_str()
                 .ok_or_else(|| cli_error("argument is not valid UTF-8"))?
-                .to_owned(),
+                .into(),
         };
         let slot = &mut values[index];
         if matches!(leaves[index].shape, Shape::List(_)) {
@@ -142,11 +142,11 @@ fn insert(table: &mut Table, path: &[&str], node: ConfigNode) {
     match path {
         [] => {},
         [key] => {
-            table.insert((*key).to_owned(), node);
+            table.insert(Text::from(*key), node);
         },
         [key, rest @ ..] => {
             let child = table
-                .entry((*key).to_owned())
+                .entry(Text::from(*key))
                 .or_insert_with(|| ConfigNode::table(Table::new()));
             if let crate::Value::Table(inner) = &mut child.value {
                 insert(inner, rest, node);

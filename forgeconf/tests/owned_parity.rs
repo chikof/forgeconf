@@ -140,7 +140,7 @@ fn null_and_wrong_kinds_agree_without_a_file() {
             ConfigNode::scalar("x"),
             ConfigNode::scalar("12"),
             ConfigNode::array(vec![ConfigNode::scalar("1"), ConfigNode::null()]),
-            ConfigNode::table(BTreeMap::from([("k".to_owned(), ConfigNode::scalar("v"))])),
+            ConfigNode::table(BTreeMap::from([("k".into(), ConfigNode::scalar("v"))])),
         ]
     }
     fn check<T: FromNode + Debug>() {

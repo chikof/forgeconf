@@ -133,7 +133,7 @@ struct Fixed(&'static str, &'static str);
 impl ConfigSource for Fixed {
     fn load(&self) -> Result<ConfigNode, ConfigError> {
         let mut table = Table::new();
-        table.insert(self.0.to_owned(), ConfigNode::scalar(self.1));
+        table.insert(self.0.into(), ConfigNode::scalar(self.1));
         Ok(ConfigNode::table(table))
     }
 }

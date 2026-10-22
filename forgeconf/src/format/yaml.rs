@@ -10,7 +10,7 @@
 use std::iter::repeat_n;
 
 use super::cursor::Cursor;
-use crate::{ConfigError, ConfigNode, ErrorKind, Origin, Table};
+use crate::{ConfigError, ConfigNode, ErrorKind, Origin, Table, Text};
 
 const FORMAT: &str = "yaml";
 
@@ -60,7 +60,7 @@ enum Stop {
 
 /// What a block-context node starts with.
 enum Head {
-    Key(String, Origin),
+    Key(Text, Origin),
     Scalar(ConfigNode),
 }
 
@@ -331,14 +331,14 @@ impl Parser<'_> {
     }
 
     /// Block mapping at `indent`; the first key and its `:` are consumed.
-    fn mapping(&mut self, indent: usize, first: String, first_origin: Origin) -> Res<ConfigNode> {
+    fn mapping(&mut self, indent: usize, first: Text, first_origin: Origin) -> Res<ConfigNode> {
         self.cur.enter(FORMAT)?;
         let origin = first_origin.clone();
         let parent = to_isize(indent);
         let mut table = Table::new();
         let (mut key, mut key_origin) = (first, first_origin);
         loop {
-            if table.contains_key(&key) {
+            if table.contains_key(&*key) {
                 return Err(syntax_at(&key_origin, format!("duplicate key \"{key}\"")));
             }
             self.skip_spaces();
@@ -372,7 +372,7 @@ impl Parser<'_> {
             let text = self.quoted(parent)?;
             if self.eat_key_colon() {
                 self.single_line_key(&origin)?;
-                return Ok(Head::Key(text, origin));
+                return Ok(Head::Key(Text::from(text), origin));
             }
             return Ok(Head::Scalar(ConfigNode::scalar(text).with_origin(origin)));
         }
@@ -391,7 +391,7 @@ impl Parser<'_> {
     }
 
     /// Next key of a block mapping, with its `:` consumed.
-    fn key(&mut self) -> Res<(String, Origin)> {
+    fn key(&mut self) -> Res<(Text, Origin)> {
         self.reject_indicator()?;
         let origin = self.cur.origin();
         if self.is_seq_entry() {
@@ -406,7 +406,7 @@ impl Parser<'_> {
                 return Err(syntax_at(&origin, "expected ':' after mapping key"));
             }
             self.single_line_key(&origin)?;
-            return Ok((text, origin));
+            return Ok((Text::from(text), origin));
         }
         match self.plain_key()? {
             Some(key) => Ok((key, origin)),
@@ -415,7 +415,7 @@ impl Parser<'_> {
     }
 
     /// Consume a plain key and its `:` when the line holds one.
-    fn plain_key(&mut self) -> Res<Option<String>> {
+    fn plain_key(&mut self) -> Res<Option<Text>> {
         let origin = self.cur.origin();
         let rest = self.cur.rest();
         let (end, colon, stop) = scan_plain(rest, false);
@@ -425,7 +425,7 @@ impl Parser<'_> {
         let key = rest.get(..end).unwrap_or("");
         check_plain_key(key, &origin)?;
         self.advance(colon + 1);
-        Ok(Some(key.to_owned()))
+        Ok(Some(Text::from(key)))
     }
 
     fn colon_follows(&self) -> bool {
@@ -934,7 +934,7 @@ impl Parser<'_> {
             Some(_) => self.value(parent, true)?,
         };
         let mut table = Table::new();
-        table.insert(key, value);
+        table.insert(Text::from(key), value);
         Ok(ConfigNode::table(table).with_origin(origin))
     }
 
@@ -976,7 +976,7 @@ impl Parser<'_> {
             if !quoted {
                 check_plain_key(&key, &key_origin)?;
             }
-            if table.contains_key(&key) {
+            if table.contains_key(key.as_str()) {
                 return Err(syntax_at(&key_origin, format!("duplicate key \"{key}\"")));
             }
 
@@ -992,7 +992,7 @@ impl Parser<'_> {
             } else {
                 ConfigNode::null().with_origin(self.cur.origin())
             };
-            table.insert(key, value);
+            table.insert(Text::from(key), value);
             need_comma = true;
         }
         self.cur.leave();
@@ -1168,12 +1168,7 @@ mod test {
     }
 
     fn map(entries: Vec<(&str, ConfigNode)>) -> ConfigNode {
-        ConfigNode::table(
-            entries
-                .into_iter()
-                .map(|(k, v)| (k.to_owned(), v))
-                .collect(),
-        )
+        ConfigNode::table(entries.into_iter().map(|(k, v)| (k.into(), v)).collect())
     }
 
     fn parsed(input: &str) -> ConfigNode {

@@ -3,7 +3,7 @@
 use std::ffi::OsString;
 
 use super::walk;
-use crate::{ConfigError, ConfigNode, Origin, Shape, Table};
+use crate::{ConfigError, ConfigNode, Origin, Shape, Table, Text};
 
 /// A node tree with one scalar per leaf whose variable `vars` knows.
 ///
@@ -61,11 +61,11 @@ fn leaf_node(shape: Shape, label: &str, text: &str) -> ConfigNode {
 fn insert(table: &mut Table, path: &[&str], node: ConfigNode) {
     let Some((key, rest)) = path.split_first() else { return };
     if rest.is_empty() {
-        table.insert((*key).to_owned(), node);
+        table.insert(Text::from(*key), node);
         return;
     }
     let child = table
-        .entry((*key).to_owned())
+        .entry(Text::from(*key))
         .or_insert_with(|| ConfigNode::table(Table::new()));
     // A `flatten` collision can leave a non-table here; the later leaf wins.
     if child.as_table().is_none() {

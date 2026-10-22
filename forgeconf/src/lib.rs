@@ -53,6 +53,7 @@ mod origin;
 mod shape;
 mod source;
 mod suggest;
+mod text;
 pub mod validators;
 #[cfg(feature = "watch")]
 mod watch;
@@ -102,5 +103,6 @@ pub use node::{ConfigNode, Table, Value};
 pub use origin::Origin;
 pub use shape::{EnumInfo, FieldInfo, Shape, StructInfo, VariantInfo};
 pub use source::{ConfigFile, ConfigSource};
+pub use text::Text;
 #[cfg(feature = "watch")]
 pub use watch::Watcher;

@@ -364,13 +364,13 @@ fn compare(expected: &Json, actual: &ConfigNode, path: &str) -> Result<(), Strin
             let Some(got) = actual.as_table() else {
                 return mismatch("table");
             };
-            let want_keys: Vec<_> = map.keys().collect();
-            let got_keys: Vec<_> = got.keys().collect();
+            let want_keys: Vec<&str> = map.keys().map(String::as_str).collect();
+            let got_keys: Vec<&str> = got.keys().map(|key| key.as_str()).collect();
             if want_keys != got_keys {
                 return Err(format!("{path}: expected keys {want_keys:?}, got {got_keys:?}"));
             }
             for (key, want) in map {
-                compare(want, &got[key], &format!("{path}.{key}"))?;
+                compare(want, &got[key.as_str()], &format!("{path}.{key}"))?;
             }
             Ok(())
         },

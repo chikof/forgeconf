@@ -38,7 +38,7 @@ mod test {
     fn scalar_table(entries: &[(&str, &str)]) -> ConfigNode {
         let mut table = Table::new();
         for (key, value) in entries {
-            table.insert((*key).to_owned(), ConfigNode::scalar(*value));
+            table.insert((*key).into(), ConfigNode::scalar(*value));
         }
         ConfigNode::table(table)
     }

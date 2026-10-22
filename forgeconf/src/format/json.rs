@@ -3,7 +3,7 @@
 use std::collections::btree_map::Entry as MapEntry;
 
 use super::cursor::Cursor;
-use crate::{ConfigError, ConfigNode, Table};
+use crate::{ConfigError, ConfigNode, Table, Text};
 
 const FORMAT: &str = "json";
 
@@ -24,7 +24,7 @@ struct Doc<'a> {
 
 /// A parsed object member, with the byte offset of its key.
 struct Entry {
-    key: String,
+    key: Text,
     node: ConfigNode,
     pos: usize,
 }
@@ -227,7 +227,7 @@ fn build_table(doc: &mut Doc<'_>, start: usize) -> Result<Table, ConfigError> {
 fn fail(
     doc: &mut Doc<'_>,
     members: std::ops::Range<usize>,
-    pending: Option<(String, usize)>,
+    pending: Option<(Text, usize)>,
     err: ConfigError,
 ) -> ConfigError {
     doc.stack.truncate(members.end);
@@ -299,13 +299,13 @@ fn string_run(bytes: &[u8]) -> (usize, bool) {
     (at + len, ascii)
 }
 
-fn parse_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
+fn parse_string(c: &mut Cursor<'_>) -> Result<Text, ConfigError> {
     c.advance_ascii(1);
     let rest = c.rest();
     let bytes = rest.as_bytes();
     let (len, ascii) = string_run(bytes);
     if bytes.get(len) == Some(&b'"') {
-        let text = rest.get(..len).unwrap_or("").to_owned();
+        let text = Text::from(rest.get(..len).unwrap_or(""));
         if ascii {
             c.advance_ascii(len + 1);
         } else {
@@ -317,7 +317,7 @@ fn parse_string(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
 }
 
 /// The string after its opening quote when it holds an escape or is malformed.
-fn parse_string_slow(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
+fn parse_string_slow(c: &mut Cursor<'_>) -> Result<Text, ConfigError> {
     let mut out = String::new();
     loop {
         let rest = c.rest();
@@ -327,7 +327,7 @@ fn parse_string_slow(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
         match bytes.get(len) {
             Some(b'"') => {
                 c.advance_flat(len + 1);
-                return Ok(out);
+                return Ok(Text::from(out));
             },
             Some(b'\\') => {
                 c.advance_flat(len + 1);
@@ -404,7 +404,7 @@ fn parse_hex4(c: &mut Cursor<'_>) -> Result<u32, ConfigError> {
 }
 
 /// Validate a number against the JSON grammar and return its exact text.
-fn parse_number(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
+fn parse_number(c: &mut Cursor<'_>) -> Result<Text, ConfigError> {
     let rest = c.rest();
     let bytes = rest.as_bytes();
     let digits = |from: usize| {
@@ -438,7 +438,7 @@ fn parse_number(c: &mut Cursor<'_>) -> Result<String, ConfigError> {
         }
     }
     c.advance_ascii(end);
-    Ok(rest.get(..end).unwrap_or("").to_owned())
+    Ok(Text::from(rest.get(..end).unwrap_or("")))
 }
 
 /// The error for a missing digit `offset` bytes into the number.
@@ -480,21 +480,21 @@ mod test {
             "tags": ["a", "b"], "none": null, "ratio": -0.5, "empty": {}, "list": []}"#;
         let expected = ConfigNode::table(Table::from([
             (
-                "server".to_owned(),
+                "server".into(),
                 ConfigNode::table(Table::from([
-                    ("host".to_owned(), ConfigNode::scalar("localhost")),
-                    ("port".to_owned(), ConfigNode::scalar("8080")),
-                    ("tls".to_owned(), ConfigNode::scalar("false")),
+                    ("host".into(), ConfigNode::scalar("localhost")),
+                    ("port".into(), ConfigNode::scalar("8080")),
+                    ("tls".into(), ConfigNode::scalar("false")),
                 ])),
             ),
             (
-                "tags".to_owned(),
+                "tags".into(),
                 ConfigNode::array(vec![ConfigNode::scalar("a"), ConfigNode::scalar("b")]),
             ),
-            ("none".to_owned(), ConfigNode::null()),
-            ("ratio".to_owned(), ConfigNode::scalar("-0.5")),
-            ("empty".to_owned(), ConfigNode::table(Table::new())),
-            ("list".to_owned(), ConfigNode::array(Vec::new())),
+            ("none".into(), ConfigNode::null()),
+            ("ratio".into(), ConfigNode::scalar("-0.5")),
+            ("empty".into(), ConfigNode::table(Table::new())),
+            ("list".into(), ConfigNode::array(Vec::new())),
         ]));
         assert_eq!(parsed(input), expected);
     }
@@ -669,7 +669,7 @@ mod test {
     fn skips_bom() {
         assert_eq!(
             parsed("\u{feff}{\"a\": 1}"),
-            ConfigNode::table(Table::from([("a".to_owned(), ConfigNode::scalar("1"))]))
+            ConfigNode::table(Table::from([("a".into(), ConfigNode::scalar("1"))]))
         );
     }
 }

@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
 use super::cursor::{Cursor, MAX_DEPTH};
-use crate::{ConfigError, ConfigNode, ErrorKind, Origin, Table};
+use crate::{ConfigError, ConfigNode, ErrorKind, Origin, Table, Text};
 
 const FORMAT: &str = "toml";
 
@@ -107,7 +107,7 @@ struct TableSlot {
     leaves: Leaves,
     /// Tables and arrays of tables still open to headers or dotted keys. A
     /// name is in `leaves` or in `children`, never in both.
-    children: BTreeMap<String, Child>,
+    children: BTreeMap<Text, Child>,
     state: State,
     origin: Origin,
 }
@@ -139,7 +139,7 @@ const LINEAR_MAX: usize = 16;
 #[derive(Debug)]
 enum Leaves {
     List {
-        items: Vec<(String, ConfigNode)>,
+        items: Vec<(Text, ConfigNode)>,
         sorted: bool,
     },
     Map(Table),
@@ -172,7 +172,7 @@ impl Leaves {
             if *sorted {
                 match items.last().map(|(last, _)| last.as_str().cmp(name)) {
                     None | Some(Ordering::Less) => {
-                        items.push((String::from(name), node));
+                        items.push((Text::from(name), node));
                         return true;
                     },
                     Some(Ordering::Equal) => return false,
@@ -183,7 +183,7 @@ impl Leaves {
                 if items.iter().any(|(k, _)| k == name) {
                     return false;
                 }
-                items.push((String::from(name), node));
+                items.push((Text::from(name), node));
                 return true;
             }
             *self = Self::Map(std::mem::take(items).into_iter().collect());
@@ -195,7 +195,7 @@ impl Leaves {
     }
 
     fn insert_map(map: &mut Table, name: &str, node: ConfigNode) -> bool {
-        match map.entry(String::from(name)) {
+        match map.entry(Text::from(name)) {
             Entry::Occupied(_) => false,
             Entry::Vacant(slot) => {
                 slot.insert(node);
@@ -294,7 +294,7 @@ fn descend<'t>(
         };
         let table = TableSlot::new(part.origin.clone(), created);
         cur.children
-            .insert(String::from(&*part.name), Child::Table(table));
+            .insert(Text::from(&*part.name), Child::Table(table));
     }
     match cur.children.get_mut(&*part.name) {
         Some(Child::Table(table)) => {
@@ -358,7 +358,7 @@ fn apply_header<'t>(
         return Err(leaf_error(&last.origin, &path(), node));
     }
     let lost = || error_at(&last.origin, "internal error: empty array of tables");
-    match cur.children.entry(String::from(&*last.name)) {
+    match cur.children.entry(Text::from(&*last.name)) {
         Entry::Vacant(slot) => {
             let table = TableSlot::new(last.origin.clone(), State::Header);
             slot.insert(if is_array {
@@ -634,17 +634,17 @@ fn parse_value(c: &mut Cursor<'_>) -> Result<ConfigNode, ConfigError> {
     let node = match c.peek() {
         Some(b'"') => {
             let text = if c.rest().starts_with("\"\"\"") {
-                ml_basic_string(c)?
+                Text::from(ml_basic_string(c)?)
             } else {
-                basic_string(c)?.into_owned()
+                cow_text(basic_string(c)?)
             };
             ConfigNode::scalar(text)
         },
         Some(b'\'') => {
             let text = if c.rest().starts_with("'''") {
-                ml_literal_string(c)?
+                Text::from(ml_literal_string(c)?)
             } else {
-                literal_string(c)?.into_owned()
+                cow_text(literal_string(c)?)
             };
             ConfigNode::scalar(text)
         },
@@ -800,6 +800,12 @@ fn string_stop(c: &Cursor<'_>) -> ConfigError {
     }
 }
 
+fn cow_text(text: Cow<'_, str>) -> Text {
+    match text {
+        Cow::Borrowed(text) => Text::from(text),
+        Cow::Owned(text) => Text::from(text),
+    }
+}
 fn basic_string<'a>(c: &mut Cursor<'a>) -> Result<Cow<'a, str>, ConfigError> {
     c.skip_flat();
     let first = take_plain_run(c, b'"', true);
@@ -983,9 +989,9 @@ fn unicode_escape(c: &mut Cursor<'_>, digits: usize) -> Result<char, ConfigError
 // ---------------------------------------------------------------------------
 
 /// Validate a bare token and return the text to store.
-fn scalar_text(text: &str) -> Result<String, String> {
+fn scalar_text(text: &str) -> Result<Text, String> {
     if matches!(text, "true" | "false") {
-        return Ok(text.to_owned());
+        return Ok(Text::from(text));
     }
     // Plain decimal integers short of i64's range are already in canonical
     // form: no sign, underscores or leading zero.
@@ -993,14 +999,14 @@ fn scalar_text(text: &str) -> Result<String, String> {
         && text.bytes().all(|b| b.is_ascii_digit())
         && (text.len() == 1 || !text.starts_with('0'))
     {
-        return Ok(text.to_owned());
+        return Ok(Text::from(text));
     }
     let bytes = text.as_bytes();
     let starts_date = bytes.get(4) == Some(&b'-') && bytes[..4].iter().all(u8::is_ascii_digit);
     let starts_time = bytes.get(2) == Some(&b':') && bytes[..2].iter().all(u8::is_ascii_digit);
     if starts_date || starts_time {
         return if valid_datetime(bytes) {
-            Ok(text.to_owned())
+            Ok(Text::from(text))
         } else {
             Err(format!("invalid date or time \"{text}\""))
         };
@@ -1016,7 +1022,7 @@ fn digits_ok(s: &str, radix: u32) -> bool {
         && s.chars().all(|ch| ch == '_' || ch.is_digit(radix))
 }
 
-fn number_text(text: &str) -> Result<String, String> {
+fn number_text(text: &str) -> Result<Text, String> {
     let invalid = || format!("invalid number \"{text}\"");
     let (negative, body) = match text.as_bytes().first() {
         Some(b'+') => (false, &text[1..]),
@@ -1024,7 +1030,7 @@ fn number_text(text: &str) -> Result<String, String> {
         _ => (false, text),
     };
     if matches!(body, "inf" | "nan") {
-        return Ok(text.to_owned());
+        return Ok(Text::from(text));
     }
     let radix = if body.len() == text.len() {
         [("0x", 16), ("0o", 8), ("0b", 2)]
@@ -1041,7 +1047,7 @@ fn number_text(text: &str) -> Result<String, String> {
         return u64::from_str_radix(&cleaned, radix)
             .ok()
             .filter(|&n| n <= i64::MAX as u64)
-            .map(|n| n.to_string())
+            .map(|n| Text::from(n.to_string()))
             .ok_or_else(|| format!("integer \"{text}\" is out of range for i64"));
     }
 
@@ -1058,7 +1064,7 @@ fn number_text(text: &str) -> Result<String, String> {
         let signed = if negative { format!("-{cleaned}") } else { cleaned };
         return signed
             .parse::<i64>()
-            .map(|n| n.to_string())
+            .map(|n| Text::from(n.to_string()))
             .map_err(|_| format!("integer \"{text}\" is out of range for i64"));
     }
 
@@ -1078,7 +1084,11 @@ fn number_text(text: &str) -> Result<String, String> {
             return Err(invalid());
         }
     }
-    Ok(text.chars().filter(|&ch| ch != '_').collect())
+    Ok(if text.contains('_') {
+        Text::from(text.chars().filter(|&ch| ch != '_').collect::<String>())
+    } else {
+        Text::from(text)
+    })
 }
 
 fn two_digits(b: &[u8], i: usize) -> Option<u32> {
@@ -1211,12 +1221,7 @@ mod test {
     }
 
     fn t(entries: Vec<(&str, ConfigNode)>) -> ConfigNode {
-        ConfigNode::table(
-            entries
-                .into_iter()
-                .map(|(k, v)| (k.to_owned(), v))
-                .collect(),
-        )
+        ConfigNode::table(entries.into_iter().map(|(k, v)| (k.into(), v)).collect())
     }
 
     fn a(items: Vec<ConfigNode>) -> ConfigNode {

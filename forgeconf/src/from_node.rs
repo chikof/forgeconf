@@ -81,7 +81,7 @@ impl FromNode for String {
 
     fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
         match node.into_scalar() {
-            Ok(text) => Ok(text),
+            Ok(text) => Ok(text.into_string()),
             Err(node) => Self::from_node(&node),
         }
     }
@@ -271,7 +271,7 @@ impl FromNode for Box<str> {
 
     fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
         match node.into_scalar() {
-            Ok(text) => Ok(text.into_boxed_str()),
+            Ok(text) => Ok(text.into_string().into_boxed_str()),
             Err(node) => Self::from_node(&node),
         }
     }
@@ -298,7 +298,7 @@ impl FromNode for PathBuf {
 
     fn from_node_owned(node: ConfigNode) -> Result<Self, ConfigError> {
         match node.into_scalar() {
-            Ok(text) => Ok(PathBuf::from(text)),
+            Ok(text) => Ok(PathBuf::from(text.into_string())),
             Err(node) => Self::from_node(&node),
         }
     }
@@ -622,7 +622,7 @@ mod test {
         ConfigNode::table(
             entries
                 .iter()
-                .map(|(key, value)| ((*key).to_owned(), ConfigNode::scalar(*value)))
+                .map(|(key, value)| ((*key).into(), ConfigNode::scalar(*value)))
                 .collect(),
         )
     }
