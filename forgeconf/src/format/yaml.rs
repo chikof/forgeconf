@@ -480,12 +480,13 @@ impl Parser<'_> {
     }
 
     /// Text of a plain scalar, with multi-line folding.
-    fn plain_text(&mut self, parent: isize, flow: bool) -> Res<String> {
+    fn plain_text(&mut self, parent: isize, flow: bool) -> Res<Text> {
+        // Only a scalar that continues on another line needs a buffer.
         let mut text = String::new();
         loop {
             let rest = self.cur.rest();
             let (end, stop_at, stop) = scan_plain(rest, flow);
-            text.push_str(rest.get(..end).unwrap_or(""));
+            let part = rest.get(..end).unwrap_or("");
             if !flow && matches!(stop, Stop::Colon) {
                 self.advance(stop_at);
                 return Err(self
@@ -493,10 +494,17 @@ impl Parser<'_> {
                     .error(FORMAT, "mapping values are not allowed in this context"));
             }
             self.advance(end);
-            if !matches!(stop, Stop::Eol) {
-                break;
-            }
-            let Some((target, breaks)) = self.continuation(parent, flow) else { break };
+            let next =
+                if matches!(stop, Stop::Eol) { self.continuation(parent, flow) } else { None };
+            let Some((target, breaks)) = next else {
+                return Ok(if text.is_empty() {
+                    Text::from(part)
+                } else {
+                    text.push_str(part);
+                    Text::from(text)
+                });
+            };
+            text.push_str(part);
             if breaks == 1 {
                 text.push(' ');
             } else {
@@ -504,7 +512,6 @@ impl Parser<'_> {
             }
             self.advance_to(target);
         }
-        Ok(text)
     }
 
     /// Where a plain scalar ending at the cursor continues on a later line:
@@ -909,7 +916,7 @@ impl Parser<'_> {
                 }
                 return Ok(node);
             },
-            Some(b'"' | b'\'') => (self.quoted(parent)?, true),
+            Some(b'"' | b'\'') => (Text::from(self.quoted(parent)?), true),
             Some(b'|' | b'>') => return self.value(parent, true),
             Some(b'-') if self.dash_entry(true) => return self.value(parent, true),
             _ => (self.plain_text(parent, true)?, false),
@@ -934,7 +941,7 @@ impl Parser<'_> {
             Some(_) => self.value(parent, true)?,
         };
         let mut table = Table::new();
-        table.insert(Text::from(key), value);
+        table.insert(key, value);
         Ok(ConfigNode::table(table).with_origin(origin))
     }
 
@@ -972,11 +979,15 @@ impl Parser<'_> {
             }
             self.reject_indicator()?;
             let quoted = matches!(self.cur.peek(), Some(b'"' | b'\''));
-            let key = if quoted { self.quoted(parent)? } else { self.plain_text(parent, true)? };
+            let key = if quoted {
+                Text::from(self.quoted(parent)?)
+            } else {
+                self.plain_text(parent, true)?
+            };
             if !quoted {
                 check_plain_key(&key, &key_origin)?;
             }
-            if table.contains_key(key.as_str()) {
+            if table.contains_key(&*key) {
                 return Err(syntax_at(&key_origin, format!("duplicate key \"{key}\"")));
             }
 
@@ -992,7 +1003,7 @@ impl Parser<'_> {
             } else {
                 ConfigNode::null().with_origin(self.cur.origin())
             };
-            table.insert(Text::from(key), value);
+            table.insert(key, value);
             need_comma = true;
         }
         self.cur.leave();
@@ -1014,8 +1025,8 @@ fn line_body(s: &str) -> (usize, &str) {
 }
 
 /// A plain scalar's text as a node: the null forms become `Null`.
-fn plain_node(text: String, origin: Origin) -> ConfigNode {
-    let node = if matches!(text.as_str(), "" | "~" | "null" | "Null" | "NULL") {
+fn plain_node(text: Text, origin: Origin) -> ConfigNode {
+    let node = if matches!(&*text, "" | "~" | "null" | "Null" | "NULL") {
         ConfigNode::null()
     } else {
         ConfigNode::scalar(text)
