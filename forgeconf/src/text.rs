@@ -304,7 +304,7 @@ mod test {
         assert_eq!(text, *"abc");
         assert_eq!(text, "abc");
         assert_eq!(text, String::from("abc"));
-        assert_ne!(text, "abd");
+        assert_ne!(text, "abx");
         assert_eq!(String::from(text), "abc");
     }
 
