@@ -42,7 +42,7 @@ Versions (from `Cargo.lock`): config 0.15.27, figment 0.10.19, confique 0.4.0, s
 
 ### Runtime
 
-Each value is the criterion median in µs, averaged over two full runs taken after the performance work (including the inline `Text` type). Between the two runs the forgeconf medians moved by 4.7 % or less. Treat gaps under about 5 % as no measurable difference. The ratio column is relative to forgeconf, so lower than 1.00 means faster than forgeconf.
+Each value is the criterion median in µs, averaged over two full runs taken after the performance work (including the inline `Text` type). Between the two runs the forgeconf medians moved by 4.7 % or less. The load average was up to 7.9 when they started, so the JSON and layered groups were run twice more at load 2.2 to 2.4: json/small 1.31 against serde_json 0.39, json/large 137 against 114, layered 4.50 against confique 4.60, all within 5 % of the table. Treat gaps under about 5 % as no measurable difference. The ratio column is relative to forgeconf, so lower than 1.00 means faster than forgeconf.
 
 | Group | Library | µs | vs forgeconf |
 |---|---|---|---|

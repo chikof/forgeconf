@@ -299,6 +299,32 @@ mod test {
     }
 
     #[test]
+    fn ordering_matches_str_exhaustively_around_the_inline_limit() {
+        // NUL is the padding byte and é is two bytes, so these cover padding
+        // ties and texts that switch between inline and heap storage.
+        let parts = ["", "\0", "a", "é"];
+        let mut texts = Vec::new();
+        for prefix in [String::new(), "x".repeat(19)] {
+            for a in parts {
+                for b in parts {
+                    for c in parts {
+                        texts.push(format!("{prefix}{a}{b}{c}"));
+                    }
+                }
+            }
+        }
+        assert!(texts.iter().any(|t| t.len() > 22) && texts.iter().any(|t| t.len() == 22));
+        let as_text: Vec<Text> = texts.iter().map(|t| Text::from(t.as_str())).collect();
+        for (x, tx) in texts.iter().zip(&as_text) {
+            assert_eq!(tx.as_str(), x);
+            for (y, ty) in texts.iter().zip(&as_text) {
+                assert_eq!(tx.cmp(ty), x.cmp(y), "{x:?} vs {y:?}");
+                assert_eq!(tx == ty, x == y, "{x:?} vs {y:?}");
+            }
+        }
+    }
+
+    #[test]
     fn comparisons_with_str_and_string() {
         let text = Text::from("abc");
         assert_eq!(text, *"abc");
