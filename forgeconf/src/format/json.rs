@@ -85,6 +85,7 @@ fn parse_value(c: &mut Cursor<'_>, doc: &mut Doc<'_>) -> Result<ConfigNode, Conf
     Ok(node.with_origin(origin))
 }
 
+#[cold]
 fn unexpected(c: &Cursor<'_>, expected: &str) -> ConfigError {
     match c.rest().chars().next() {
         Some(ch) => c.error(FORMAT, format!("unexpected {ch:?}, expected {expected}")),
@@ -165,6 +166,7 @@ fn earliest_duplicate(sorted: &[Entry]) -> Option<&Entry> {
         .min_by_key(|entry| entry.pos)
 }
 
+#[cold]
 fn duplicate_key(input: &str, source: &str, key: &str, pos: usize) -> ConfigError {
     let mut at = Cursor::new(input, source);
     at.advance(pos);
@@ -442,6 +444,7 @@ fn parse_number(c: &mut Cursor<'_>) -> Result<Text, ConfigError> {
 }
 
 /// The error for a missing digit `offset` bytes into the number.
+#[cold]
 fn number_error(c: &mut Cursor<'_>, offset: usize) -> ConfigError {
     c.advance_ascii(offset);
     unexpected(c, "a digit")

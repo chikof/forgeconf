@@ -54,6 +54,7 @@ fn end_of_line(text: &str, pos: usize) -> usize {
     text[pos..].find('\n').map_or(text.len(), |i| pos + i)
 }
 
+#[cold]
 fn syntax_error(text: &str, pos: usize, source: &str, message: &str) -> ConfigError {
     let before = &text[..pos];
     let line = before.matches('\n').count() + 1;

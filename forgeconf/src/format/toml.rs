@@ -333,6 +333,7 @@ fn descend<'t>(
     }
 }
 
+#[cold]
 fn leaf_error(origin: &Origin, path: &str, node: &ConfigNode) -> ConfigError {
     let message = match node.kind() {
         "table" => format!("inline table \"{path}\" cannot be extended"),
@@ -415,6 +416,7 @@ fn insert_key_value(
     }
 }
 
+#[cold]
 fn error_at(origin: &Origin, message: impl Into<String>) -> ConfigError {
     ConfigError::new(ErrorKind::Syntax { format: FORMAT, message: message.into() })
         .with_origin(Some(origin))
@@ -792,6 +794,7 @@ fn take_plain_run<'a>(c: &mut Cursor<'a>, quote: u8, escapes: bool) -> &'a str {
 }
 
 /// Error for the byte that ended a plain run inside a single-line string.
+#[cold]
 fn string_stop(c: &Cursor<'_>) -> ConfigError {
     match c.peek() {
         None => c.error(FORMAT, "unterminated string"),

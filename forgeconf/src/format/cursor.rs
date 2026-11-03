@@ -153,6 +153,7 @@ impl<'a> Cursor<'a> {
     }
 
     /// A `Syntax` error for `format` at the current position.
+    #[cold]
     pub(crate) fn error(&self, format: &'static str, msg: impl Into<String>) -> ConfigError {
         ConfigError::new(ErrorKind::Syntax { format, message: msg.into() })
             .with_origin(Some(&self.origin()))

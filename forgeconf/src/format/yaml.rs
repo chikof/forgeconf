@@ -29,11 +29,13 @@ pub(crate) fn parse(input: &str, source: &str) -> Res<ConfigNode> {
     parser.document()
 }
 
+#[cold]
 fn syntax_at(origin: &Origin, message: impl Into<String>) -> ConfigError {
     ConfigError::new(ErrorKind::Syntax { format: FORMAT, message: message.into() })
         .with_origin(Some(origin))
 }
 
+#[cold]
 fn unsupported_at(origin: &Origin, message: &str) -> ConfigError {
     ConfigError::new(ErrorKind::Unsupported(message.to_owned())).with_origin(Some(origin))
 }
@@ -127,6 +129,7 @@ impl Parser<'_> {
         })
     }
 
+    #[cold]
     fn multiple_documents(&self) -> ConfigError {
         unsupported_at(&self.cur.origin(), "yaml documents after the first are not supported")
     }
@@ -157,6 +160,7 @@ impl Parser<'_> {
         }
     }
 
+    #[cold]
     fn comment_needs_space(&self) -> ConfigError {
         self.cur
             .error(FORMAT, "a comment needs whitespace before '#'")

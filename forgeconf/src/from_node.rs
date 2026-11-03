@@ -457,6 +457,7 @@ where
         .collect()
 }
 
+#[cold]
 fn entry_mismatch<K>(key: &str, child: &ConfigNode) -> ConfigError {
     let expected = std::any::type_name::<K>()
         .rsplit("::")

@@ -155,10 +155,12 @@ fn insert(table: &mut Table, path: &[&str], node: ConfigNode) {
     }
 }
 
+#[cold]
 fn cli_error(message: impl Into<String>) -> ConfigError {
     ConfigError::new(ErrorKind::Cli(message.into()))
 }
 
+#[cold]
 fn unexpected(token: &str) -> ConfigError {
     cli_error(format!("unexpected argument \"{token}\""))
 }
