@@ -146,7 +146,18 @@ pub fn field<T: FromNode>(
     insensitive: bool,
     default: Option<fn() -> T>,
 ) -> Result<T, ConfigError> {
-    field_with(parent, table, keys, insensitive, default, None::<fn(&T) -> Result<(), ConfigError>>)
+    let name = keys.first().copied().unwrap_or_default();
+    if let Some(child) = lookup(table, keys, insensitive) {
+        return T::from_node(child).map_err(|e| e.at_key(name));
+    }
+    if let Some(default) = default {
+        return Ok(default());
+    }
+    T::from_missing().ok_or_else(|| missing(name, parent.origin()))
+}
+
+fn missing(name: &str, origin: Option<&Origin>) -> ConfigError {
+    ConfigError::missing().at_key(name).with_origin(origin)
 }
 
 /// [`field`] with a validator.
@@ -224,7 +235,14 @@ pub fn field_owned<T: FromNode>(
     insensitive: bool,
     default: Option<fn() -> T>,
 ) -> Result<T, ConfigError> {
-    field_owned_with(parent, keys, insensitive, default, None::<fn(&T) -> Result<(), ConfigError>>)
+    let name = keys.first().copied().unwrap_or_default();
+    if let Some(child) = take(&mut parent.table, keys, insensitive) {
+        return T::from_node_owned(child).map_err(|e| e.at_key(name));
+    }
+    if let Some(default) = default {
+        return Ok(default());
+    }
+    T::from_missing().ok_or_else(|| missing(name, parent.origin.as_ref()))
 }
 
 /// [`field`] for a table being consumed, with a validator.
