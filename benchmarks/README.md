@@ -56,7 +56,7 @@ Bars are criterion medians, and whiskers are their 95 % confidence intervals. Tw
 
 ![Clean build time, stripped binary size and crate count per library](images/footprint.svg)
 
-With one build job instead of 16, the clean build time measures total compile work (median of three): forgeconf 4.6 s, forgeconf CLI-only 3.7 s, serde + toml 6.3 s, config 7.0 s, clap 7.5 s, confique 8.3 s, figment 16.0 s.
+With one build job instead of 16, the clean build time measures total compile work (median of three): forgeconf 4.7 s, forgeconf CLI-only 3.8 s, serde + toml 6.5 s, config 7.2 s, clap 7.6 s, confique 8.5 s, figment 16.4 s. The machine ran about 2 % slower than in the previous measurement across all libraries.
 
 ### Instructions
 

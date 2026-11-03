@@ -17,6 +17,7 @@ Forgeconf has no third-party runtime dependencies: the TOML, JSON and YAML parse
   - [Validators](#validators)
   - [Errors](#errors)
   - [Features](#features)
+  - [Performance](#performance)
   - [Examples](#examples)
   - [Releasing](#releasing)
   - [License](#license)
@@ -193,6 +194,18 @@ Use `error.kind()` (`ErrorKind::Missing`, `Mismatch`, `Invalid`, `UnknownKey`, `
 | `yaml`   | no      | YAML (common subset) parser, `.yaml` / `.yml` files |
 | `dotenv` | no      | `.env` file support                                 |
 | `watch`  | no      | Polling hot reload                                  |
+
+## Performance
+
+forgeconf has no dependencies besides its derive macro. Loading a typical file plus environment variables takes a few microseconds, so in a normal program it is a tiny fraction of process start-up. [`benchmarks/`](./benchmarks) compares speed, build time, binary size and crate count with config, figment, confique, serde and clap.
+
+Settings in your own application that make forgeconf, and the rest of your code, faster:
+
+- `lto = true` (or `"fat"`) and `codegen-units = 1` in `[profile.release]`. In our benchmarks this removed 1 % to 11 % of the instructions forgeconf runs.
+- `panic = "abort"`, if your application does not rely on unwinding.
+- Profile-guided optimisation, or a faster global allocator, if configuration is loaded very often, for example in tests.
+
+forgeconf does not set any of these for you: they are decisions for the final binary.
 
 ## Examples
 
