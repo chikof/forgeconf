@@ -1,7 +1,7 @@
 [package]
 name = "forgeconf"
 description = "Declarative configuration loader for Rust structs powered by attribute macros."
-version = "0.5.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Chiko <chiko@envs.net>"]
@@ -20,7 +20,7 @@ json = []
 cli = []
 
 [dependencies]
-forgeconf_macros = { version = "=0.5.0", path = "../forgeconf_macros" }
+forgeconf_macros = { version = "=1.0.0", path = "../forgeconf_macros" }
 
 [dev-dependencies]
 tempfile = "3.27.0"

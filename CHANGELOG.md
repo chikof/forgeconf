@@ -3,6 +3,123 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [1.0.0](https://github.com/chikof/forgeconf/compare/v0.5.0..v1.0.0) - 2026-11-03
+
+### Bug Fixes
+
+- **(macros)** show default expressions in help as written - ([7958c80](https://github.com/chikof/forgeconf/commit/7958c801917cad5288d6e9e8ff42a422368fa2bd)) - chiko
+- debloat pending todo - ([09b1b4a](https://github.com/chikof/forgeconf/commit/09b1b4a93896e098b26e46ce6b07625964514c94)) - chiko
+- supress clippy warnings - ([6759614](https://github.com/chikof/forgeconf/commit/675961414f9a7f5e930e9b46a0f341a2efff9913)) - chiko
+
+### Documentation
+
+- **(benchmarks)** record versions and the JSON limiter measurement - ([b7eb62b](https://github.com/chikof/forgeconf/commit/b7eb62b58da1a702ed718ffe4e636a96dadcb846)) - chiko
+- **(benchmarks)** record results after the performance work - ([c622f55](https://github.com/chikof/forgeconf/commit/c622f5542a497d74bb88655cf5daa0d4006464cc)) - chiko
+- **(benchmarks)** record results with inline strings - ([018da70](https://github.com/chikof/forgeconf/commit/018da70739f10cd20e629b0874f1b735e06b7198)) - chiko
+- **(benchmarks)** refresh one-job build times and the layered subtitle - ([3794f72](https://github.com/chikof/forgeconf/commit/3794f7292f361a2c375c26d7f9a6c0c64680c1bb)) - chiko
+- add performance tips and refresh benchmark charts - ([49b32e9](https://github.com/chikof/forgeconf/commit/49b32e9fd3b6b290a36554be7c91877947311b5f)) - chiko
+
+### Features
+
+- **(cli)** [**breaking**] parse command-line flags from the config shape with generated help - ([8e594ee](https://github.com/chikof/forgeconf/commit/8e594ee68a615b0f1e22b4243ea696a89934557c)) - chiko
+- **(core)** add DotenvSource behind dotenv feature flag - ([90d8cd7](https://github.com/chikof/forgeconf/commit/90d8cd7d8d37542876d2955488eb5c787cc64a63)) - chiko
+- **(core)** add WatchSource for notify-based hot-reload - ([78fe412](https://github.com/chikof/forgeconf/commit/78fe4123661a061524a1d67600e5c5fd2c48dbc2)) - chiko
+- **(env)** [**breaking**] load environment variables and .env files from the config shape - ([7826a59](https://github.com/chikof/forgeconf/commit/7826a59713ac1bac5fe5c85aebb23a8583a2aa1b)) - chiko
+- **(format)** [**breaking**] parse JSON in-house with line and column errors - ([59c9dd8](https://github.com/chikof/forgeconf/commit/59c9dd805a30853d678f4cbc750eb04c0f35ecc0)) - chiko
+- **(format)** [**breaking**] parse a documented YAML subset in-house - ([fd5d72f](https://github.com/chikof/forgeconf/commit/fd5d72f8938f8ac3c7c68fc5783ec542b0e6a016)) - chiko
+- **(format)** [**breaking**] parse TOML 1.0 in-house - ([7e98dd5](https://github.com/chikof/forgeconf/commit/7e98dd592c39b618c96753841f7c0ebff746655e)) - chiko
+- **(macros)** split render into modules; add prefix-aware clap trait - ([5b3d114](https://github.com/chikof/forgeconf/commit/5b3d114fcc0b1683a560e2d4af509ddc74397bb9)) - chiko
+- **(macros)** add env_prefix attribute to forgeconf macro - ([55511f4](https://github.com/chikof/forgeconf/commit/55511f4a1be57c85c0144d8ce6120385d8125b81)) - chiko
+- **(macros)** add deprecated field attribute with runtime warning - ([7b655fa](https://github.com/chikof/forgeconf/commit/7b655fa76dac782d4144a2473c6dcec59999e800)) - chiko
+- **(macros)** add sensitive field attribute with masked Debug output - ([daaa630](https://github.com/chikof/forgeconf/commit/daaa6309b52549af4582467ee9171a579bee1b9f)) - chiko
+- **(macros)** add alias field attribute for multi-key config lookup - ([3a68495](https://github.com/chikof/forgeconf/commit/3a6849515671cca48ad195245fc92fba17fb6909)) - chiko
+- **(watch)** [**breaking**] poll watched files and reload without notify - ([abd283e](https://github.com/chikof/forgeconf/commit/abd283e64006779dfb8bd4eb8a43def35eb7b8c8)) - chiko
+- add clap support for cli - ([6709cdf](https://github.com/chikof/forgeconf/commit/6709cdf587657fbe217d6b202809137ed3d7329d)) - chiko
+- [**breaking**] load maps, sets, paths, durations and addresses; panic-free validators - ([aacc346](https://github.com/chikof/forgeconf/commit/aacc346b6c2a32b8b11b3df6c6c9c943860fcbd6)) - chiko
+- [**breaking**] replace #[forgeconf] with #[derive(Config)] and Loader - ([5adf0be](https://github.com/chikof/forgeconf/commit/5adf0beae20544d645146a7c64aa1b7d6b0832ac)) - chiko
+- [**breaking**] store short strings inline with the new Text type - ([9f804be](https://github.com/chikof/forgeconf/commit/9f804bea8154222c811f99daaaa0e150ba070f0b)) - chiko
+
+### Miscellaneous Chores
+
+- fix clippy warning - ([2aed23b](https://github.com/chikof/forgeconf/commit/2aed23b7a83a730def4f6672647cbbf0e22797a4)) - chiko
+- adopt devenv and project tooling - ([779411d](https://github.com/chikof/forgeconf/commit/779411def548040b538ade6ea8dbe9ab29324ee4)) - chiko
+- fix the spacing of unscoped breaking entries in the changelog - ([31a6972](https://github.com/chikof/forgeconf/commit/31a69725b0c7c2d3157ea8a069ffaf2a76fad08b)) - chiko
+
+### Performance
+
+- **(convert)** move scalars and children out of the owned tree - ([aef921d](https://github.com/chikof/forgeconf/commit/aef921dc137daaed13d59787c65a8da210a2699e)) - chiko
+- **(convert)** parse scalars before trimming and match bool words by length - ([9cf0c27](https://github.com/chikof/forgeconf/commit/9cf0c27e3f02a0f57eeb8ce278fb3358bc5c6d63)) - chiko
+- **(env)** walk leaves and deprecations without allocating - ([fbc55f5](https://github.com/chikof/forgeconf/commit/fbc55f58fbb17a1d53e65e714beb7336937572be)) - chiko
+- **(error)** write Display directly into the formatter - ([c529e1a](https://github.com/chikof/forgeconf/commit/c529e1a869073b588240b03d1301c0305d01e759)) - chiko
+- **(error)** format origin and counts without fmt::Arguments - ([4166b24](https://github.com/chikof/forgeconf/commit/4166b246c4343d101d8b9b3b2f01ab8d13c0062b)) - chiko
+- **(error)** push single chars and digits without write_str - ([1b327eb](https://github.com/chikof/forgeconf/commit/1b327eb68e8037438c563083c6173885ad6e0207)) - chiko
+- **(errors)** mark parser error builders cold - ([8f91258](https://github.com/chikof/forgeconf/commit/8f91258b02f1c853ca5b62fb99b4b2e6c8a21211)) - chiko
+- **(format)** decode ASCII bytes directly in the cursor - ([9d9c202](https://github.com/chikof/forgeconf/commit/9d9c202c13c58c67217fc922f1074f3ee946ecc7)) - chiko
+- **(format)** name the file origin without formatting the path - ([794b61f](https://github.com/chikof/forgeconf/commit/794b61fcd627ec104553fd6825fcbdc92d9d7f6d)) - chiko
+- **(inline)** inline small accessors and derive helpers across the crate boundary - ([bb666fe](https://github.com/chikof/forgeconf/commit/bb666fe1a372c3f3efe1024d72dfc8645b4da72c)) - chiko
+- **(json)** bulk-build object tables and scan strings and numbers by slice - ([db9593b](https://github.com/chikof/forgeconf/commit/db9593b1cff060ae17e1490951084db2ad5f8b97)) - chiko
+- **(json)** insert small objects directly and scan strings eight bytes at a time - ([7cfdf6a](https://github.com/chikof/forgeconf/commit/7cfdf6a917d03574c6683a2d99df1ce3d793449b)) - chiko
+- **(json)** share one member stack across all objects of a document - ([6390d4d](https://github.com/chikof/forgeconf/commit/6390d4d5132bad4e5ecd6f17c882861b71319491)) - chiko
+- **(json)** advance string and number text without line tracking - ([3a67420](https://github.com/chikof/forgeconf/commit/3a674208a6996818eaa2daaa4870ae80ef7960be)) - chiko
+- **(json)** step over punctuation and blanks without char decoding - ([87a0590](https://github.com/chikof/forgeconf/commit/87a0590f17f39eef16e2d8310f6714c438e8c589)) - chiko
+- **(json)** presize the member stack from the input length - ([a60e403](https://github.com/chikof/forgeconf/commit/a60e4035499183002043a3eb498240b91ad3e1e0)) - chiko
+- **(json)** split the escape-free string path from the general one - ([fed83e5](https://github.com/chikof/forgeconf/commit/fed83e5f718243a0d17da1775278d06c5526b375)) - chiko
+- **(json)** move the column by byte count over ASCII text - ([ab1fe69](https://github.com/chikof/forgeconf/commit/ab1fe694fbd2531ce7c953eae3386da65ff04140)) - chiko
+- **(json)** detect repeated keys after the bulk build - ([f5d6128](https://github.com/chikof/forgeconf/commit/f5d6128a3a5ac8c1057afbea520d13447280885f)) - chiko
+- **(loader)** move into an empty base, skip plain fields in the deprecation walk - ([73399d5](https://github.com/chikof/forgeconf/commit/73399d5b56108210363dc17978a8f3c0417b412c)) - chiko
+- **(macros)** share the borrowed field reader across fields without validators - ([1780a5c](https://github.com/chikof/forgeconf/commit/1780a5c3b6997c9ce4d5871925e4ae0d7813fbb3)) - chiko
+- **(macros)** read unvalidated fields without the validator branches - ([e6ce3cb](https://github.com/chikof/forgeconf/commit/e6ce3cb4024c595a9dc16518c6f1c26bf4132207)) - chiko
+- **(macros)** record field errors inside the shared reader - ([a19b575](https://github.com/chikof/forgeconf/commit/a19b575fdaad72df958ed1c3c6cdff7ea6c759d7)) - chiko
+- **(macros)** instantiate validated field readers once per type - ([9d0380c](https://github.com/chikof/forgeconf/commit/9d0380cc0f32bb228e71f1131000eccf9d21703a)) - chiko
+- **(suggest)** reuse one row buffer and prune by length and bound - ([724a8d7](https://github.com/chikof/forgeconf/commit/724a8d78bc02c174d644bfb7332a3c19118569d7)) - chiko
+- **(suggest)** ASCII fast path and table-free check for one edit - ([f18d4ca](https://github.com/chikof/forgeconf/commit/f18d4caf9b0a22d078e1f436f1f264fd633fb9f5)) - chiko
+- **(toml)** scan strings, keys and comments by byte runs - ([cf3cbf2](https://github.com/chikof/forgeconf/commit/cf3cbf25549de6bf47fb3537eb3a91c0cb267499)) - chiko
+- **(toml)** fill the current table directly and keep leaves out of the builder tree - ([04fb4f1](https://github.com/chikof/forgeconf/commit/04fb4f152c9dce1e47931d15c98e1ca0aff2d456)) - chiko
+- **(toml)** take plain decimal integers verbatim - ([2a5d64c](https://github.com/chikof/forgeconf/commit/2a5d64ca20a658e0551f72c223fe8b67cb9af5de)) - chiko
+- **(toml)** test single bytes instead of matching prefixes - ([e36122e](https://github.com/chikof/forgeconf/commit/e36122e390ee82ff4efb92a05d53a16ee42d4b26)) - chiko
+- **(toml)** scan keys, tokens and strings with byte tables and flat column steps - ([d1da97c](https://github.com/chikof/forgeconf/commit/d1da97c2abd133da7f62e218f238b2be1ae9381b)) - chiko
+- **(toml)** build small tables in a map directly and keep the sorted list for large ones - ([6038a0b](https://github.com/chikof/forgeconf/commit/6038a0bc9f41430edd59c9c51d511b81360560dd)) - chiko
+- **(yaml)** build single-line plain scalars from the borrowed slice - ([4fa10b1](https://github.com/chikof/forgeconf/commit/4fa10b196fc08b060db843a52985b0c3717c164e)) - chiko
+
+### Refactoring
+
+- **(format)** pass the origin source to every parser - ([836554e](https://github.com/chikof/forgeconf/commit/836554e9b61bd4a7f18b7bff8b97ddf5b5f71af7)) - chiko
+- **(format)** compile the cursor only with a format enabled - ([0031545](https://github.com/chikof/forgeconf/commit/0031545beb044245d3af76686c7b872c401774be)) - chiko
+- **(source)** share the settable-leaf walk for env and CLI - ([f9cc4f0](https://github.com/chikof/forgeconf/commit/f9cc4f0200482984e94608c4c99603d7bee7d91e)) - chiko
+- [**breaking**] merge forgeconf_core into forgeconf and drop dead dependencies - ([98e5a99](https://github.com/chikof/forgeconf/commit/98e5a997957fedce671092679081d9cc768f40ce)) - chiko
+- [**breaking**] rebuild errors, nodes and FromNode on a std-only core - ([b0c0898](https://github.com/chikof/forgeconf/commit/b0c089871cd057d273a8119eec862dca6f3b64d5)) - chiko
+- satisfy the library lint table - ([764877f](https://github.com/chikof/forgeconf/commit/764877fc2ff9c0b8c70772650c4c2d8848d07de3)) - chiko
+
+### Style
+
+- **(format)** wrap a cursor doc comment - ([b9ba213](https://github.com/chikof/forgeconf/commit/b9ba2133b76c9da17bf16c1eba29684317cd0ff9)) - chiko
+
+### Tests
+
+- **(benchmarks)** count instructions per scenario with callgrind - ([2339c7f](https://github.com/chikof/forgeconf/commit/2339c7fac45d6c5a0ba67a70ec89460bcf586cd2)) - chiko
+- **(benchmarks)** give confique the same nine env variables as forgeconf - ([bddce7d](https://github.com/chikof/forgeconf/commit/bddce7ddc0efd9f997160c97069acbc6bbb6f603)) - chiko
+- **(benchmarks)** draw the results as SVG charts - ([18a51bc](https://github.com/chikof/forgeconf/commit/18a51bc60122cec2476cd7c6afa0dd14120d5bed)) - chiko
+- **(text)** check ordering against str around the inline limit - ([45c622b](https://github.com/chikof/forgeconf/commit/45c622b946a2dd7e7dbc9daec8735df9bbabd3f7)) - chiko
+- **(yaml)** pin the cases the subset rejects as Unsupported - ([fd80984](https://github.com/chikof/forgeconf/commit/fd80984873b36b55b61a0d971663b72a9417e1bd)) - chiko
+- run MSRV, feature powerset and TOML/JSON/YAML conformance suites via test-all - ([4c3a840](https://github.com/chikof/forgeconf/commit/4c3a84056d5285b44e2c8fa175645abef7496258)) - chiko
+- benchmark forgeconf against config, figment, confique, serde and clap - ([ad32287](https://github.com/chikof/forgeconf/commit/ad322874d758585a68ca4cb401647eea0ec75592)) - chiko
+- avoid a spelling-checker false positive - ([06f8720](https://github.com/chikof/forgeconf/commit/06f87202b2570fe04cded54752f22c5d7591fb6d)) - chiko
+- avoid a spelling-checker false positive - ([0bd675d](https://github.com/chikof/forgeconf/commit/0bd675d407fe4b8487b43c1321a6e96cfe0bf064)) - chiko
+
+### Build
+
+- **(deps)** bump toml from 1.0.6+spec-1.1.0 to 1.1.2+spec-1.1.0 ([#36](https://github.com/chikof/forgeconf/issues/36)) - ([9344f3a](https://github.com/chikof/forgeconf/commit/9344f3ae96015cf6708dd5bfe98925a045eb9e11)) - dependabot[bot]
+- **(deps)** bump clap from 4.5.54 to 4.6.1 ([#38](https://github.com/chikof/forgeconf/issues/38)) - ([1cff7be](https://github.com/chikof/forgeconf/commit/1cff7be4e1b6301ba0dfd116a6a13f821d735904)) - dependabot[bot]
+- **(deps)** bump config from 0.15.21 to 0.15.23 ([#37](https://github.com/chikof/forgeconf/issues/37)) - ([e0fb2ff](https://github.com/chikof/forgeconf/commit/e0fb2ff7b480d79413a43b8bcaca059d091e8d77)) - dependabot[bot]
+- adopt the library lint table workspace-wide - ([f425d98](https://github.com/chikof/forgeconf/commit/f425d98c7ff615802ae2d1b5ed8877d72dc80893)) - chiko
+- compile shape-walk and cursor helpers only where used - ([bfcf286](https://github.com/chikof/forgeconf/commit/bfcf2865de85bf9fbee9b516d82a4845b0c80781)) - chiko
+
+### Ci
+
+- run the check gate, MSRV and feature matrix - ([35bd71c](https://github.com/chikof/forgeconf/commit/35bd71c4d0bc943e85537ceb47009dff1c171f5a)) - chiko
+- retry publishing forgeconf while the macro crate propagates - ([b60bee9](https://github.com/chikof/forgeconf/commit/b60bee956bc179d27068af4762eed11005dc1c48)) - chiko
+
+---
 ## [0.5.0](https://github.com/chikof/forgeconf/compare/v0.4.1..v0.5.0) - 2026-04-21
 
 ### Bug Fixes
@@ -57,7 +174,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bug Fixes
 
--  [**breaking**]remove cfg attributes from macro to prevent check-cfg warnings - ([25df425](https://github.com/chikof/forgeconf/commit/25df425caaa1f15a7f6d85a4a5acbe8a88b38db5)) - Chiko
+- [**breaking**] remove cfg attributes from macro to prevent check-cfg warnings - ([25df425](https://github.com/chikof/forgeconf/commit/25df425caaa1f15a7f6d85a4a5acbe8a88b38db5)) - Chiko
 
 ### Ci
 
