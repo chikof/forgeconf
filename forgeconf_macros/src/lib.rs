@@ -249,7 +249,8 @@ mod tests {
         for needle in [
             "impl::forgeconf::FromNodeforServer",
             "let__table=::forgeconf::__private::table(node,\"Server\")?;",
-            "::forgeconf::__private::field::<u16>(node,__table,&[\"listen-port\",\"p\"],false,",
+            "::forgeconf::__private::field_validated::<u16>(node,__table,&[\"listen-port\",\"p\"],\
+             false,",
             "::core::option::Option::Some(||8080)",
             "::forgeconf::__private::field::<String>(node,__table,&[\"api-key\"],false,",
             "::core::option::Option::Some(||::core::convert::Into::into(\"x\"))",

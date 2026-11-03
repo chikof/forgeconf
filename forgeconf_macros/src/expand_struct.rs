@@ -160,14 +160,10 @@ fn compact(text: &str) -> String {
 fn validate_tokens(field: &FieldDef) -> TokenStream {
     let ty = &field.ty;
     let validators = &field.attrs.validators;
-    if validators.is_empty() {
-        quote!(|_: &#ty| ::core::result::Result::Ok(()))
-    } else {
-        quote! {
-            |__value: &#ty| {
-                #( (#validators)(__value)?; )*
-                ::core::result::Result::Ok(())
-            }
+    quote! {
+        |__value: &#ty| {
+            #( (#validators)(__value)?; )*
+            ::core::result::Result::Ok(())
         }
     }
 }
@@ -187,25 +183,24 @@ fn field_stmt(index: usize, field: &FieldDef, owned: bool) -> TokenStream {
         .attrs
         .sensitive
         .then(|| quote!(.map_err(::forgeconf::ConfigError::redacted)));
+    let validated = !field.attrs.validators.is_empty();
+    let validate = validated.then(|| {
+        let validate = validate_tokens(field);
+        quote!(, #validate)
+    });
     if owned {
-        let read = if field.attrs.validators.is_empty() {
-            quote! {
-                ::forgeconf::__private::field_owned::<#ty>(&mut __owned, &[#(#names),*], #insensitive, #default)
-            }
-        } else {
-            let validate = validate_tokens(field);
-            quote! {
-                ::forgeconf::__private::field_owned_validated::<#ty>(&mut __owned, &[#(#names),*], #insensitive, #default, #validate)
-            }
-        };
+        let read = if validated { quote!(field_owned_validated) } else { quote!(field_owned) };
         return quote! {
-            let #var = __errors.take(#read #redact);
+            let #var = __errors.take(
+                ::forgeconf::__private::#read::<#ty>(&mut __owned, &[#(#names),*], #insensitive, #default #validate)
+                    #redact
+            );
         };
     }
-    let validate = validate_tokens(field);
+    let read = if validated { quote!(field_validated) } else { quote!(field) };
     quote! {
         let #var = __errors.take(
-            ::forgeconf::__private::field::<#ty>(node, __table, &[#(#names),*], #insensitive, #default, #validate)
+            ::forgeconf::__private::#read::<#ty>(node, __table, &[#(#names),*], #insensitive, #default #validate)
                 #redact
         );
     }

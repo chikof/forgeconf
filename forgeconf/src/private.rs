@@ -8,7 +8,6 @@ use crate::{ConfigError, ConfigNode, ErrorKind, FromNode, Origin, Shape, Table, 
 
 /// The table behind `node`; null stands for an empty table so a struct whose
 /// fields all have defaults loads from nothing.
-#[inline]
 pub fn table<'a>(node: &'a ConfigNode, type_name: &'static str) -> Result<&'a Table, ConfigError> {
     static EMPTY: Table = BTreeMap::new();
     if node.is_null() {
@@ -46,7 +45,6 @@ impl OwnedTable {
 
     /// The entries, including the placeholders of fields already taken.
     #[must_use]
-    #[inline]
     pub fn table(&self) -> &Table {
         &self.table
     }
@@ -88,7 +86,6 @@ pub fn single_entry(node: ConfigNode) -> Result<Single, ConfigError> {
 
 /// First present, non-null child among `keys`; exact match, or ASCII
 /// case-insensitive when `insensitive`.
-#[inline]
 fn lookup<'a>(table: &'a Table, keys: &[&str], insensitive: bool) -> Option<&'a ConfigNode> {
     keys.iter().find_map(|key| {
         let found = if insensitive {
@@ -104,26 +101,28 @@ fn lookup<'a>(table: &'a Table, keys: &[&str], insensitive: bool) -> Option<&'a 
     })
 }
 
-/// Read one struct field. `keys[0]` is the canonical key, the rest are aliases;
-/// errors are recorded under the canonical key.
-#[inline]
-pub fn field<T: FromNode>(
+#[inline(always)]
+fn field_with<T: FromNode, V: Fn(&T) -> Result<(), ConfigError>>(
     parent: &ConfigNode,
     table: &Table,
     keys: &[&str],
     insensitive: bool,
     default: Option<fn() -> T>,
-    validate: impl Fn(&T) -> Result<(), ConfigError>,
+    validate: Option<V>,
 ) -> Result<T, ConfigError> {
     let name = keys.first().copied().unwrap_or_default();
     if let Some(child) = lookup(table, keys, insensitive) {
         let value = T::from_node(child).map_err(|e| e.at_key(name))?;
-        validate(&value).map_err(|e| e.with_origin(child.origin()).at_key(name))?;
+        if let Some(validate) = validate {
+            validate(&value).map_err(|e| e.with_origin(child.origin()).at_key(name))?;
+        }
         return Ok(value);
     }
     if let Some(default) = default {
         let value = default();
-        validate(&value).map_err(|e| e.at_key(name))?;
+        if let Some(validate) = validate {
+            validate(&value).map_err(|e| e.at_key(name))?;
+        }
         return Ok(value);
     }
     T::from_missing().ok_or_else(|| {
@@ -133,9 +132,41 @@ pub fn field<T: FromNode>(
     })
 }
 
+/// Read one struct field. `keys[0]` is the canonical key, the rest are aliases;
+/// errors are recorded under the canonical key.
+///
+/// # Errors
+///
+/// A mismatch when the child does not convert, or the key is missing without a
+/// default.
+pub fn field<T: FromNode>(
+    parent: &ConfigNode,
+    table: &Table,
+    keys: &[&str],
+    insensitive: bool,
+    default: Option<fn() -> T>,
+) -> Result<T, ConfigError> {
+    field_with(parent, table, keys, insensitive, default, None::<fn(&T) -> Result<(), ConfigError>>)
+}
+
+/// [`field`] with a validator.
+///
+/// # Errors
+///
+/// The same errors as [`field`].
+pub fn field_validated<T: FromNode>(
+    parent: &ConfigNode,
+    table: &Table,
+    keys: &[&str],
+    insensitive: bool,
+    default: Option<fn() -> T>,
+    validate: impl Fn(&T) -> Result<(), ConfigError>,
+) -> Result<T, ConfigError> {
+    field_with(parent, table, keys, insensitive, default, Some(validate))
+}
+
 /// Move the first present, non-null child among `keys` out of `table`; same
 /// matching as [`lookup`].
-#[inline]
 fn take(table: &mut Table, keys: &[&str], insensitive: bool) -> Option<ConfigNode> {
     keys.iter().find_map(|key| {
         let child = if insensitive {
@@ -225,7 +256,6 @@ impl Collector {
     }
 
     /// Unwrap an `Ok`, or record the error and return `None`.
-    #[inline]
     pub fn take<T>(&mut self, result: Result<T, ConfigError>) -> Option<T> {
         match result {
             Ok(value) => Some(value),
@@ -414,7 +444,7 @@ mod test {
         default: Option<fn() -> T>,
     ) -> Result<T, ConfigError> {
         let table = table(node, "T")?;
-        field(node, table, keys, insensitive, default, |_| Ok(()))
+        field(node, table, keys, insensitive, default)
     }
 
     #[test]
@@ -489,22 +519,20 @@ mod test {
         };
         let n = node(&[("port", ConfigNode::scalar("500").with_origin(at(2)))]);
         let t = table(&n, "T").unwrap();
-        let err = field::<u16>(&n, t, &["port"], false, None, reject).unwrap_err();
+        let err = field_validated::<u16>(&n, t, &["port"], false, None, reject).unwrap_err();
         assert_eq!(err.to_string(), "port: too big (app.toml:2:1)");
 
         let empty = node(&[]);
         let t = table(&empty, "T").unwrap();
-        let err = field::<u16>(&empty, t, &["port"], false, Some(|| 500), reject).unwrap_err();
+        let err =
+            field_validated::<u16>(&empty, t, &["port"], false, Some(|| 500), reject).unwrap_err();
         assert_eq!(err.to_string(), "port: too big");
 
         let t = table(&n, "T").unwrap();
         assert!(
-            field::<Option<u16>>(&empty, table(&empty, "T").unwrap(), &["x"], false, None, |_| Ok(
-                ()
-            ))
-            .is_ok()
+            field::<Option<u16>>(&empty, table(&empty, "T").unwrap(), &["x"], false, None).is_ok()
         );
-        assert!(field::<u16>(&n, t, &["port"], false, None, |_| Ok(())).is_ok());
+        assert!(field::<u16>(&n, t, &["port"], false, None).is_ok());
     }
 
     #[test]

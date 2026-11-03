@@ -291,10 +291,8 @@ mod test {
         fn from_node(node: &ConfigNode) -> Result<Self, ConfigError> {
             let table = private::table(node, "Probe")?;
             let mut errors = private::Collector::new();
-            let name = errors.take(private::field(node, table, &["name"], false, None, |_| Ok(())));
-            let legacy =
-                errors
-                    .take(private::field(node, table, &["legacy", "old"], false, None, |_| Ok(())));
+            let name = errors.take(private::field(node, table, &["name"], false, None));
+            let legacy = errors.take(private::field(node, table, &["legacy", "old"], false, None));
             if let (Some(name), Some(legacy)) = (name, legacy) {
                 errors.finish(Self { name, legacy })
             } else {
