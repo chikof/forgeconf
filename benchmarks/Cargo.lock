@@ -467,6 +467,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "forgeconf-charts"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "forgeconf_macros"
 version = "0.5.0"
 dependencies = [

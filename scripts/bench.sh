@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # Comparison benchmarks (benchmarks/, a separate cargo workspace).
 #
-#   scripts/bench.sh [runtime|footprint|instructions]... [-- <criterion args>]
+#   scripts/bench.sh [runtime|footprint|instructions|charts]... [-- <criterion args>]
 #
 # runtime    criterion run of benchmarks/runtime (args after `--` go to criterion)
 # footprint  clean build time, stripped size and crate count of one minimal
 #            binary per library; every binary is run and verified first, so a
-#            broken binary never gets a number
+#            broken binary never gets a number; written to
+#            benchmarks/results/footprint.md and footprint.tsv
 # instructions  instructions per iteration of every scenario under callgrind:
 #            deterministic, so small changes show without timing noise; written
 #            to benchmarks/results/instructions.tsv
+# charts     render the SVG charts in benchmarks/images/ from the criterion
+#            output and benchmarks/results/*.tsv (run the targets above first)
+#
+# With no target: runtime, footprint, charts.
 #
 # FOOTPRINT_RUNS=N   clean builds per library (default 3)
 # FOOTPRINT_QUICK=1  no timing: incremental build in a shared target dir and
@@ -21,6 +26,7 @@ cd "$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
 MANIFEST=benchmarks/Cargo.toml
 FIXTURE=benchmarks/fixtures/app.toml
 RESULTS=benchmarks/results/footprint.md
+RESULTS_TSV=benchmarks/results/footprint.tsv
 RUNS=${FOOTPRINT_RUNS:-3}
 QUICK=${FOOTPRINT_QUICK:-0}
 
@@ -32,7 +38,11 @@ die() {
 }
 
 usage() {
-  die "usage: scripts/bench.sh [runtime|footprint|instructions]... [-- <criterion args>]"
+  die "usage: scripts/bench.sh [runtime|footprint|instructions|charts]... [-- <criterion args>]"
+}
+
+charts() {
+  cargo run -q --release --locked --manifest-path "$MANIFEST" -p forgeconf-charts -- "$PWD/benchmarks"
 }
 
 runtime() {
@@ -113,14 +123,13 @@ now() {
   date +%s.%N
 }
 
-# Median and min-max of the sorted-numerically seconds on stdin.
+# Median, min and max of the numeric seconds on stdin, space separated.
 summarize() {
   sort -n | awk '
     { v[NR] = $1 }
     END {
       m = (NR % 2) ? v[(NR + 1) / 2] : (v[NR / 2] + v[NR / 2 + 1]) / 2
-      if (NR == 1) printf "%.1f", m
-      else printf "%.1f (%.1f-%.1f)", m, v[1], v[NR]
+      printf "%.3f %.3f %.3f", m, v[1], v[NR]
     }'
 }
 
@@ -145,7 +154,11 @@ footprint() {
   fi
   [[ $RUNS =~ ^[1-9][0-9]*$ ]] || die "FOOTPRINT_RUNS must be a positive integer"
 
-  local rows="" name dir t0 t1 times bin bytes
+  local rows="" rows_tsv="" name dir t0 t1 times bin bytes med lo hi kib crates_normal crates_build
+  local ctx_rustc ctx_cores ctx_date
+  ctx_rustc=$(rustc -V)
+  ctx_cores=$(nproc)
+  ctx_date=$(date +%F)
   # Global: the EXIT trap runs after this function's locals are gone.
   footprint_tmp=$(mktemp -d)
   trap 'rm -rf "$footprint_tmp"' EXIT
@@ -169,18 +182,28 @@ footprint() {
     strip "$tmp/fp-$name"
     bytes=$(stat -c %s "$tmp/fp-$name")
 
-    rows+="| $name | $(printf '%s' "$times" | summarize) | $(awk -v b="$bytes" 'BEGIN { printf "%.1f", b / 1024 }') | $(crate_count "$name" normal) | $(crate_count "$name" normal,build) |"$'\n'
+    read -r med lo hi <<<"$(printf '%s' "$times" | summarize)"
+    kib=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b / 1024 }')
+    crates_normal=$(crate_count "$name" normal)
+    crates_build=$(crate_count "$name" normal,build)
+    rows+="| $name | $(awk -v m="$med" -v a="$lo" -v b="$hi" 'BEGIN { if (a == b) printf "%.1f", m; else printf "%.1f (%.1f-%.1f)", m, a, b }') | $kib | $crates_normal | $crates_build |"$'\n'
+    rows_tsv+="$name"$'\t'"$med"$'\t'"$lo"$'\t'"$hi"$'\t'"$kib"$'\t'"$crates_normal"$'\t'"$crates_build"$'\n'
     echo "fp-$name: verified" >&2
   done
 
   mkdir -p "$(dirname "$RESULTS")"
   {
-    echo "Footprint: $(rustc -V), $(nproc) cores, $(date +%F), $RUNS clean release builds each"
+    echo "Footprint: $ctx_rustc, $ctx_cores cores, $ctx_date, $RUNS clean release builds each"
     echo
     echo "| library | build s median (min-max) | stripped KiB | crates (normal) | crates (normal+build) |"
     echo "|---|---|---|---|---|"
     printf '%s' "$rows"
   } | tee "$RESULTS"
+  {
+    printf '# rustc=%s\tcores=%s\tdate=%s\truns=%s\tjobs=%s\n' "$ctx_rustc" "$ctx_cores" "$ctx_date" "$RUNS" "${CARGO_BUILD_JOBS:-$ctx_cores}"
+    printf 'library\tbuild_s_median\tbuild_s_min\tbuild_s_max\tstripped_kib\tcrates_normal\tcrates_build\n'
+    printf '%s' "$rows_tsv"
+  } >"$RESULTS_TSV"
 }
 
 targets=()
@@ -194,7 +217,7 @@ while (($#)); do
   targets+=("$1")
   shift
 done
-((${#targets[@]})) || targets=(runtime footprint)
+((${#targets[@]})) || targets=(runtime footprint charts)
 
 for target in "${targets[@]}"; do
   case $target in
@@ -203,6 +226,7 @@ for target in "${targets[@]}"; do
       ;;
     footprint) footprint ;;
     instructions) instructions ;;
+    charts) charts ;;
     *) usage ;;
   esac
 done

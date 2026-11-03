@@ -2,7 +2,7 @@
 # published: the competitors pull in serde, which forgeconf itself bans.
 [workspace]
 resolver = "2"
-members = ["runtime", "footprint/*"]
+members = ["runtime", "charts", "footprint/*"]
 
 [workspace.package]
 edition = "2024"
