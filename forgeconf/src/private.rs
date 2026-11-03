@@ -260,6 +260,29 @@ pub fn field_owned_validated<T: FromNode>(
     field_owned_with(parent, keys, insensitive, default, Some(validate))
 }
 
+/// [`field_owned`] recording an error in `errors` instead of returning it.
+pub fn field_owned_or_record<T: FromNode>(
+    errors: &mut Collector,
+    parent: &mut OwnedTable,
+    keys: &[&str],
+    insensitive: bool,
+    default: Option<fn() -> T>,
+) -> Option<T> {
+    errors.take(field_owned(parent, keys, insensitive, default))
+}
+
+/// [`field`] recording an error in `errors` instead of returning it.
+pub fn field_or_record<T: FromNode>(
+    errors: &mut Collector,
+    parent: &ConfigNode,
+    table: &Table,
+    keys: &[&str],
+    insensitive: bool,
+    default: Option<fn() -> T>,
+) -> Option<T> {
+    errors.take(field(parent, table, keys, insensitive, default))
+}
+
 /// Accumulates field errors so one load reports every problem.
 #[derive(Debug, Default)]
 pub struct Collector {

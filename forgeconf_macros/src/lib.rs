@@ -339,7 +339,8 @@ mod tests {
         for needle in [
             "fnfrom_node_owned(node:::forgeconf::ConfigNode,)",
             "::forgeconf::__private::OwnedTable::new(node,\"S\")?;",
-            "::forgeconf::__private::field_owned::<u8>(&mut__owned,&[\"a\"],false,",
+            "::forgeconf::__private::field_owned_or_record::<u8>(&mut__errors,&mut__owned,&[\"a\"\
+             ],false,",
             "::forgeconf::__private::field_owned_validated::<u8>(&mut__owned,&[\"b\"],false,",
         ] {
             assert!(t.contains(needle), "{needle} missing in {t}");

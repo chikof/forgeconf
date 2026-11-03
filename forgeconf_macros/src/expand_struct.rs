@@ -188,6 +188,17 @@ fn field_stmt(index: usize, field: &FieldDef, owned: bool) -> TokenStream {
         let validate = validate_tokens(field);
         quote!(, #validate)
     });
+    if !validated && redact.is_none() {
+        return if owned {
+            quote! {
+                let #var = ::forgeconf::__private::field_owned_or_record::<#ty>(&mut __errors, &mut __owned, &[#(#names),*], #insensitive, #default);
+            }
+        } else {
+            quote! {
+                let #var = ::forgeconf::__private::field_or_record::<#ty>(&mut __errors, node, __table, &[#(#names),*], #insensitive, #default);
+            }
+        };
+    }
     if owned {
         let read = if validated { quote!(field_owned_validated) } else { quote!(field_owned) };
         return quote! {
