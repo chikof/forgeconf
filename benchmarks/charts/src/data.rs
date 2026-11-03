@@ -22,7 +22,7 @@ pub const GROUPS: [(&str, &str); 10] = [
     ("json/large", "JSON → struct, 1000-entry document"),
     ("yaml/small", "YAML → struct, small document"),
     ("yaml/large", "YAML → struct, 1000-entry document"),
-    ("layered/file+env", "TOML file + 2 env overrides → struct"),
+    ("layered/file+env", "TOML file + env overrides → struct"),
     ("cli/parse", "argv → flat struct"),
     ("cli/help", "render the --help text"),
     ("errors/report", "bad value + unknown key → error text"),
