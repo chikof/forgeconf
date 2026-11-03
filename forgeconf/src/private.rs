@@ -8,6 +8,7 @@ use crate::{ConfigError, ConfigNode, ErrorKind, FromNode, Origin, Shape, Table, 
 
 /// The table behind `node`; null stands for an empty table so a struct whose
 /// fields all have defaults loads from nothing.
+#[inline]
 pub fn table<'a>(node: &'a ConfigNode, type_name: &'static str) -> Result<&'a Table, ConfigError> {
     static EMPTY: Table = BTreeMap::new();
     if node.is_null() {
@@ -45,6 +46,7 @@ impl OwnedTable {
 
     /// The entries, including the placeholders of fields already taken.
     #[must_use]
+    #[inline]
     pub fn table(&self) -> &Table {
         &self.table
     }
@@ -86,6 +88,7 @@ pub fn single_entry(node: ConfigNode) -> Result<Single, ConfigError> {
 
 /// First present, non-null child among `keys`; exact match, or ASCII
 /// case-insensitive when `insensitive`.
+#[inline]
 fn lookup<'a>(table: &'a Table, keys: &[&str], insensitive: bool) -> Option<&'a ConfigNode> {
     keys.iter().find_map(|key| {
         let found = if insensitive {
@@ -103,6 +106,7 @@ fn lookup<'a>(table: &'a Table, keys: &[&str], insensitive: bool) -> Option<&'a 
 
 /// Read one struct field. `keys[0]` is the canonical key, the rest are aliases;
 /// errors are recorded under the canonical key.
+#[inline]
 pub fn field<T: FromNode>(
     parent: &ConfigNode,
     table: &Table,
@@ -131,6 +135,7 @@ pub fn field<T: FromNode>(
 
 /// Move the first present, non-null child among `keys` out of `table`; same
 /// matching as [`lookup`].
+#[inline]
 fn take(table: &mut Table, keys: &[&str], insensitive: bool) -> Option<ConfigNode> {
     keys.iter().find_map(|key| {
         let child = if insensitive {
@@ -220,6 +225,7 @@ impl Collector {
     }
 
     /// Unwrap an `Ok`, or record the error and return `None`.
+    #[inline]
     pub fn take<T>(&mut self, result: Result<T, ConfigError>) -> Option<T> {
         match result {
             Ok(value) => Some(value),

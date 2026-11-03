@@ -71,6 +71,7 @@ impl ConfigNode {
 
     /// The payload.
     #[must_use]
+    #[inline]
     pub fn value(&self) -> &Value {
         &self.value
     }
@@ -83,12 +84,14 @@ impl ConfigNode {
 
     /// Where this node came from, when known.
     #[must_use]
+    #[inline]
     pub fn origin(&self) -> Option<&Origin> {
         self.origin.as_ref()
     }
 
     /// The text of a scalar node.
     #[must_use]
+    #[inline]
     pub fn as_str(&self) -> Option<&str> {
         match &self.value {
             Value::Scalar(text) => Some(text),
@@ -98,6 +101,7 @@ impl ConfigNode {
 
     /// The entries of a table node.
     #[must_use]
+    #[inline]
     pub fn as_table(&self) -> Option<&Table> {
         match &self.value {
             Value::Table(table) => Some(table),
@@ -107,6 +111,7 @@ impl ConfigNode {
 
     /// The items of an array node.
     #[must_use]
+    #[inline]
     pub fn as_array(&self) -> Option<&[ConfigNode]> {
         match &self.value {
             Value::Array(items) => Some(items),
@@ -116,12 +121,14 @@ impl ConfigNode {
 
     /// Whether the node holds [`Value::Null`].
     #[must_use]
+    #[inline]
     pub fn is_null(&self) -> bool {
         matches!(self.value, Value::Null)
     }
 
     /// Table lookup; `None` for missing keys and non-table nodes.
     #[must_use]
+    #[inline]
     pub fn get(&self, key: &str) -> Option<&ConfigNode> {
         self.as_table()?.get(key)
     }
@@ -129,6 +136,7 @@ impl ConfigNode {
     /// Textual identifier of the payload kind: `"null"`, `"scalar"`, `"array"`
     /// or `"table"`.
     #[must_use]
+    #[inline]
     pub fn kind(&self) -> &'static str {
         match self.value {
             Value::Null => "null",

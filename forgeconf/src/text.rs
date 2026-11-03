@@ -74,6 +74,7 @@ impl Text {
 
     /// The text as a string slice.
     #[must_use]
+    #[inline]
     pub fn as_str(&self) -> &str {
         match &self.0 {
             Repr::Inline { len, buf } => {
@@ -107,18 +108,21 @@ impl Default for Text {
 impl Deref for Text {
     type Target = str;
 
+    #[inline]
     fn deref(&self) -> &str {
         self.as_str()
     }
 }
 
 impl AsRef<str> for Text {
+    #[inline]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
 
 impl Borrow<str> for Text {
+    #[inline]
     fn borrow(&self) -> &str {
         self.as_str()
     }
@@ -161,6 +165,7 @@ impl fmt::Display for Text {
 }
 
 impl PartialEq for Text {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
             (Repr::Inline { len: a, buf: x }, Repr::Inline { len: b, buf: y }) => {
@@ -173,30 +178,35 @@ impl PartialEq for Text {
 impl Eq for Text {}
 
 impl PartialEq<str> for Text {
+    #[inline]
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
     }
 }
 
 impl PartialEq<&str> for Text {
+    #[inline]
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
     }
 }
 
 impl PartialEq<String> for Text {
+    #[inline]
     fn eq(&self, other: &String) -> bool {
         self.as_str() == other.as_str()
     }
 }
 
 impl PartialOrd for Text {
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Text {
+    #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         match (&self.0, &other.0) {
             (Repr::Inline { len: a, buf: x }, Repr::Inline { len: b, buf: y }) => {

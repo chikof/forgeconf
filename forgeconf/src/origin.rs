@@ -22,18 +22,21 @@ impl Origin {
 
     /// File path or source label.
     #[must_use]
+    #[inline]
     pub fn source(&self) -> &str {
         &self.source
     }
 
     /// 1-based line, or `0` when the source has no position.
     #[must_use]
+    #[inline]
     pub fn line(&self) -> u32 {
         self.line
     }
 
     /// 1-based column, or `0` when the source has no position.
     #[must_use]
+    #[inline]
     pub fn column(&self) -> u32 {
         self.column
     }
