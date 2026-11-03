@@ -101,37 +101,6 @@ fn lookup<'a>(table: &'a Table, keys: &[&str], insensitive: bool) -> Option<&'a 
     })
 }
 
-#[inline(always)]
-fn field_with<T: FromNode, V: Fn(&T) -> Result<(), ConfigError>>(
-    parent: &ConfigNode,
-    table: &Table,
-    keys: &[&str],
-    insensitive: bool,
-    default: Option<fn() -> T>,
-    validate: Option<V>,
-) -> Result<T, ConfigError> {
-    let name = keys.first().copied().unwrap_or_default();
-    if let Some(child) = lookup(table, keys, insensitive) {
-        let value = T::from_node(child).map_err(|e| e.at_key(name))?;
-        if let Some(validate) = validate {
-            validate(&value).map_err(|e| e.with_origin(child.origin()).at_key(name))?;
-        }
-        return Ok(value);
-    }
-    if let Some(default) = default {
-        let value = default();
-        if let Some(validate) = validate {
-            validate(&value).map_err(|e| e.at_key(name))?;
-        }
-        return Ok(value);
-    }
-    T::from_missing().ok_or_else(|| {
-        ConfigError::missing()
-            .at_key(name)
-            .with_origin(parent.origin())
-    })
-}
-
 /// Read one struct field. `keys[0]` is the canonical key, the rest are aliases;
 /// errors are recorded under the canonical key.
 ///
@@ -171,9 +140,20 @@ pub fn field_validated<T: FromNode>(
     keys: &[&str],
     insensitive: bool,
     default: Option<fn() -> T>,
-    validate: impl Fn(&T) -> Result<(), ConfigError>,
+    validate: fn(&T) -> Result<(), ConfigError>,
 ) -> Result<T, ConfigError> {
-    field_with(parent, table, keys, insensitive, default, Some(validate))
+    let name = keys.first().copied().unwrap_or_default();
+    if let Some(child) = lookup(table, keys, insensitive) {
+        let value = T::from_node(child).map_err(|e| e.at_key(name))?;
+        validate(&value).map_err(|e| e.with_origin(child.origin()).at_key(name))?;
+        return Ok(value);
+    }
+    if let Some(default) = default {
+        let value = default();
+        validate(&value).map_err(|e| e.at_key(name))?;
+        return Ok(value);
+    }
+    T::from_missing().ok_or_else(|| missing(name, parent.origin()))
 }
 
 /// Move the first present, non-null child among `keys` out of `table`; same
@@ -190,37 +170,6 @@ fn take(table: &mut Table, keys: &[&str], insensitive: bool) -> Option<ConfigNod
             table.get_mut(*key).filter(|child| !child.is_null())
         };
         child.map(|child| mem::replace(child, ConfigNode::null()))
-    })
-}
-
-#[inline(always)]
-fn field_owned_with<T: FromNode, V: Fn(&T) -> Result<(), ConfigError>>(
-    parent: &mut OwnedTable,
-    keys: &[&str],
-    insensitive: bool,
-    default: Option<fn() -> T>,
-    validate: Option<V>,
-) -> Result<T, ConfigError> {
-    let name = keys.first().copied().unwrap_or_default();
-    if let Some(child) = take(&mut parent.table, keys, insensitive) {
-        let origin = validate.as_ref().and_then(|_| child.origin.clone());
-        let value = T::from_node_owned(child).map_err(|e| e.at_key(name))?;
-        if let Some(validate) = validate {
-            validate(&value).map_err(|e| e.with_origin(origin.as_ref()).at_key(name))?;
-        }
-        return Ok(value);
-    }
-    if let Some(default) = default {
-        let value = default();
-        if let Some(validate) = validate {
-            validate(&value).map_err(|e| e.at_key(name))?;
-        }
-        return Ok(value);
-    }
-    T::from_missing().ok_or_else(|| {
-        ConfigError::missing()
-            .at_key(name)
-            .with_origin(parent.origin.as_ref())
     })
 }
 
@@ -245,7 +194,7 @@ pub fn field_owned<T: FromNode>(
     T::from_missing().ok_or_else(|| missing(name, parent.origin.as_ref()))
 }
 
-/// [`field`] for a table being consumed, with a validator.
+/// [`field_owned`] with a validator.
 ///
 /// # Errors
 ///
@@ -255,9 +204,21 @@ pub fn field_owned_validated<T: FromNode>(
     keys: &[&str],
     insensitive: bool,
     default: Option<fn() -> T>,
-    validate: impl Fn(&T) -> Result<(), ConfigError>,
+    validate: fn(&T) -> Result<(), ConfigError>,
 ) -> Result<T, ConfigError> {
-    field_owned_with(parent, keys, insensitive, default, Some(validate))
+    let name = keys.first().copied().unwrap_or_default();
+    if let Some(child) = take(&mut parent.table, keys, insensitive) {
+        let origin = child.origin.clone();
+        let value = T::from_node_owned(child).map_err(|e| e.at_key(name))?;
+        validate(&value).map_err(|e| e.with_origin(origin.as_ref()).at_key(name))?;
+        return Ok(value);
+    }
+    if let Some(default) = default {
+        let value = default();
+        validate(&value).map_err(|e| e.at_key(name))?;
+        return Ok(value);
+    }
+    T::from_missing().ok_or_else(|| missing(name, parent.origin.as_ref()))
 }
 
 /// [`field_owned`] recording an error in `errors` instead of returning it.
